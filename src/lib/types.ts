@@ -5,6 +5,7 @@ export type MovementType = "entree" | "sortie" | "perte" | "ajustement";
 export type StockItem = {
   id: string;
   name: string;
+  brand: string;
   category: string;
   kind: StockKind;
   unit: string;
@@ -12,6 +13,8 @@ export type StockItem = {
   threshold: number;
   unitCost: number;
 };
+
+export type UserRole = "owner" | "manager" | "seller";
 
 export type StockMovement = {
   id: string;

@@ -1,19 +1,29 @@
 import Link from "next/link";
-import { BarChart3, Boxes, ClipboardCheck, History, Settings } from "lucide-react";
+import { BarChart3, Boxes, History, Settings, ShoppingCart } from "lucide-react";
+import type { UserRole } from "@/lib/types";
 
 type AppShellProps = {
-  active: "dashboard" | "stocks" | "movements" | "count";
+  active: "performance" | "sales" | "stocks" | "movements" | "settings";
+  role?: UserRole;
   children: React.ReactNode;
 };
 
-const navigation = [
-  { key: "dashboard", label: "Vue d’ensemble", href: "/", icon: BarChart3 },
+const managerNavigation = [
+  { key: "performance", label: "Performance", href: "/", icon: BarChart3 },
   { key: "stocks", label: "Stocks", href: "/stocks", icon: Boxes },
   { key: "movements", label: "Mouvements", href: "/movements", icon: History },
-  { key: "count", label: "Comptage", href: "/count", icon: ClipboardCheck },
+  { key: "settings", label: "Paramètres", href: "/settings", icon: Settings },
 ] as const;
 
-export function AppShell({ active, children }: AppShellProps) {
+const sellerNavigation = [
+  { key: "sales", label: "Ventes", href: "/sales", icon: ShoppingCart },
+  { key: "stocks", label: "Stocks", href: "/stocks?role=seller", icon: Boxes },
+  { key: "movements", label: "Mouvements", href: "/movements?role=seller", icon: History },
+] as const;
+
+export function AppShell({ active, role = "manager", children }: AppShellProps) {
+  const isSeller = role === "seller";
+  const navigation = isSeller ? sellerNavigation : managerNavigation;
   return (
     <div className="min-h-screen overflow-x-clip lg:grid lg:grid-cols-[236px_1fr]">
       <aside className="hidden min-h-screen flex-col bg-sidebar px-4 py-6 text-white lg:flex">
@@ -44,7 +54,7 @@ export function AppShell({ active, children }: AppShellProps) {
         <div className="mt-auto rounded-2xl border border-white/10 bg-white/6 p-3">
           <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-white/48">BOUTIQUE</p>
           <p className="mt-2 text-sm font-semibold">Marché Central</p>
-          <p className="mt-1 text-xs text-white/55">Dorian · Propriétaire</p>
+          <p className="mt-1 text-xs text-white/55">{isSeller ? "Aïcha · Vendeuse" : "Dorian · Gestionnaire"}</p>
         </div>
       </aside>
 
@@ -55,14 +65,14 @@ export function AppShell({ active, children }: AppShellProps) {
         </header>
         <main className="mx-auto w-full max-w-[1240px] px-4 py-6 pb-24 sm:px-7 lg:px-10 lg:py-10 lg:pb-10">{children}</main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 grid min-h-16 w-screen max-w-full grid-cols-4 border-t border-border bg-surface/96 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgb(35_55_46_/_8%)] backdrop-blur lg:hidden" aria-label="Navigation mobile">
+        <nav className={`fixed inset-x-0 bottom-0 z-40 grid min-h-16 w-screen max-w-full ${isSeller ? "grid-cols-3" : "grid-cols-4"} border-t border-border bg-surface/96 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgb(35_55_46_/_8%)] backdrop-blur lg:hidden`} aria-label="Navigation mobile">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.key;
             return (
               <Link key={item.key} href={item.href} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[0.66rem] font-medium ${isActive ? "text-brand-strong" : "text-foreground/55"}`}>
                 <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} aria-hidden="true" />
-                {item.label === "Vue d’ensemble" ? "Accueil" : item.label}
+                {item.label}
               </Link>
             );
           })}
