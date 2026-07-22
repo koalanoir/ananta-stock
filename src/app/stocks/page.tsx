@@ -63,7 +63,7 @@ function StocksContent() {
           <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-foreground/38" size={18} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Rechercher un article…" className="h-12 w-full rounded-xl border border-border bg-surface pl-11 pr-4 text-sm outline-none transition placeholder:text-foreground/35 focus:border-brand focus:ring-3 focus:ring-brand/10" />
         </label>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:overflow-x-auto sm:pb-1">
           <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>Tous <Count>{items.length}</Count></FilterButton>
           <FilterButton active={filter === "watch"} onClick={() => setFilter("watch")}>À surveiller <Count>{items.filter((item) => getStockStatus(item) !== "ok").length}</Count></FilterButton>
           <FilterButton active={filter === "rupture"} onClick={() => setFilter("rupture")}>En rupture <Count>{items.filter((item) => getStockStatus(item) === "rupture").length}</Count></FilterButton>
@@ -73,13 +73,42 @@ function StocksContent() {
       <section className="mt-6 grid gap-5 xl:grid-cols-[220px_1fr]">
         <aside className="rounded-2xl border border-border bg-surface p-3 xl:self-start">
           <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground/42"><SlidersHorizontal size={14} /> Catégories</div>
-          <div className="mt-1 flex gap-2 overflow-x-auto xl:flex-col">
-            {categories.map((name) => <button key={name} onClick={() => setCategory(name)} className={`flex h-10 shrink-0 items-center justify-between rounded-lg px-3 text-left text-sm font-medium transition ${category === name ? "bg-sidebar text-white" : "hover:bg-surface-muted"}`}>{name}<span className={`ml-4 font-mono text-xs ${category === name ? "text-white/55" : "text-foreground/38"}`}>{name === "Toutes" ? items.length : items.filter((item) => item.category === name).length}</span></button>)}
+          <div className="mt-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 xl:flex-col xl:overflow-visible xl:px-0 xl:pb-0">
+            {categories.map((name) => <button key={name} onClick={() => setCategory(name)} className={`flex h-10 shrink-0 snap-start items-center justify-between rounded-lg px-3 text-left text-sm font-medium transition ${category === name ? "bg-sidebar text-white" : "hover:bg-surface-muted"}`}>{name}<span className={`ml-3 font-mono text-xs ${category === name ? "text-white/55" : "text-foreground/38"}`}>{name === "Toutes" ? items.length : items.filter((item) => item.category === name).length}</span></button>)}
           </div>
         </aside>
 
         <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_40px_rgb(57_45_30_/_5%)]">
-          <div className="overflow-x-auto">
+          <div className="divide-y divide-border md:hidden">
+            {filteredItems.map((item) => {
+              const status = getStockStatus(item);
+              return (
+                <article key={item.id} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-1 h-9 w-1 shrink-0 rounded-full ${status === "rupture" ? "bg-danger" : status === "surveillance" ? "bg-warning" : "bg-success"}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-sm font-semibold">{item.name}</h2>
+                          <p className="mt-1 text-xs text-foreground/48">{item.category} · {item.kind === "commercialise" ? "Commercialisé" : "Outil"}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[0.65rem] font-semibold ${status === "rupture" ? "bg-danger/10 text-danger" : status === "surveillance" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>{statusLabel[status]}</span>
+                      </div>
+                      <div className="mt-4 flex items-end justify-between gap-3">
+                        <div>
+                          <p className="font-mono text-2xl font-semibold leading-none">{item.quantity}</p>
+                          <p className="mt-1 text-[0.68rem] text-foreground/45">{item.unit}{item.quantity > 1 ? "s" : ""} · seuil {item.threshold}</p>
+                        </div>
+                        <button onClick={() => setEditingItem(item)} className="h-10 rounded-lg border border-border px-3 text-xs font-semibold transition active:scale-95 active:bg-brand/5">Mettre à jour</button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[800px] text-left text-sm">
               <thead className="border-b border-border bg-surface-muted/45 text-xs uppercase tracking-[0.07em] text-foreground/44"><tr><th className="px-5 py-4 font-semibold">Article</th><th className="px-4 py-4 font-semibold">Catégorie</th><th className="px-4 py-4 font-semibold">Type</th><th className="px-4 py-4 text-center font-semibold">Disponible</th><th className="px-4 py-4 text-center font-semibold">Seuil</th><th className="px-5 py-4 text-right font-semibold">Action</th></tr></thead>
               <tbody className="divide-y divide-border">
@@ -101,7 +130,7 @@ function StocksContent() {
 }
 
 function FilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button onClick={onClick} className={`flex h-12 shrink-0 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${active ? "border-sidebar bg-sidebar text-white" : "border-border bg-surface hover:border-foreground/20"}`}>{children}</button>;
+  return <button onClick={onClick} className={`flex h-12 min-w-0 shrink-0 items-center justify-center gap-1 rounded-xl border px-2 text-xs font-semibold transition sm:gap-2 sm:px-4 sm:text-sm ${active ? "border-sidebar bg-sidebar text-white" : "border-border bg-surface hover:border-foreground/20"}`}>{children}</button>;
 }
 
 function Count({ children }: { children: React.ReactNode }) { return <span className="font-mono text-xs opacity-55">{children}</span>; }

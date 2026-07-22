@@ -15,7 +15,7 @@ const navigation = [
 
 export function AppShell({ active, children }: AppShellProps) {
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[236px_1fr]">
+    <div className="min-h-screen overflow-x-clip lg:grid lg:grid-cols-[236px_1fr]">
       <aside className="hidden min-h-screen flex-col bg-sidebar px-4 py-6 text-white lg:flex">
         <Link href="/" className="px-3" aria-label="Accueil Ananta Stock">
           <span className="block text-[1.75rem] font-bold tracking-[0.13em]">ANANTA</span>
@@ -55,7 +55,7 @@ export function AppShell({ active, children }: AppShellProps) {
         </header>
         <main className="mx-auto w-full max-w-[1240px] px-4 py-6 pb-24 sm:px-7 lg:px-10 lg:py-10 lg:pb-10">{children}</main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-border bg-surface/96 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden" aria-label="Navigation mobile">
+        <nav className="fixed inset-x-0 bottom-0 z-40 grid min-h-16 w-screen max-w-full grid-cols-4 border-t border-border bg-surface/96 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgb(35_55_46_/_8%)] backdrop-blur lg:hidden" aria-label="Navigation mobile">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.key;
