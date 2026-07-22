@@ -70,7 +70,25 @@ export default function DashboardPage() {
 
       <section className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface shadow-[0_12px_40px_rgb(57_45_30_/_5%)]">
         <div className="flex items-center justify-between px-5 py-5 sm:px-6"><h2 className="text-xl font-semibold tracking-tight">Activité récente</h2><Link href="/movements" className="text-sm font-semibold text-brand-strong hover:underline">Historique</Link></div>
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-border border-t border-border md:hidden">
+          {demoMovements.map((movement) => (
+            <article key={movement.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="break-words text-sm font-semibold leading-5">{movement.itemName}</h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-surface-muted px-2 py-1 text-[0.65rem] font-semibold">{movementLabels[movement.type]}</span>
+                    <span className="text-xs text-foreground/45">{movement.occurredAt}</span>
+                  </div>
+                </div>
+                <span className={`shrink-0 font-mono text-lg font-semibold ${movement.delta > 0 ? "text-success" : "text-danger"}`}>{movement.delta > 0 ? "+" : ""}{movement.delta}</span>
+              </div>
+              <p className="mt-3 text-xs text-foreground/50">Effectué par <span className="font-semibold text-foreground/70">{movement.author}</span></p>
+            </article>
+          ))}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[680px] text-left text-sm">
             <thead className="border-y border-border bg-surface-muted/45 text-xs uppercase tracking-[0.08em] text-foreground/45"><tr><th className="px-6 py-3 font-semibold">Article</th><th className="px-4 py-3 font-semibold">Type</th><th className="px-4 py-3 font-semibold">Quantité</th><th className="px-4 py-3 font-semibold">Par</th><th className="px-6 py-3 font-semibold">Heure</th></tr></thead>
             <tbody className="divide-y divide-border">
