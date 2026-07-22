@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Minus, Plus, Search, ShoppingCart } from "lucide-react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { demoItems } from "@/lib/demo-data";
@@ -18,6 +18,12 @@ export default function SalesPage() {
     return searchable.includes(query.trim().toLowerCase()) && (category === "Toutes" || item.category === category);
   }), [category, query, saleableItems]);
 
+  useEffect(() => {
+    if (!confirmation) return;
+    const timer = window.setTimeout(() => setConfirmation(""), 3200);
+    return () => window.clearTimeout(timer);
+  }, [confirmation]);
+
   function setQuantity(itemId: string, value: number, maximum: number) {
     setQuantities((current) => ({ ...current, [itemId]: Math.min(maximum, Math.max(1, value || 1)) }));
   }
@@ -30,7 +36,6 @@ export default function SalesPage() {
     setItems((current) => current.map((candidate) => candidate.id === itemId ? { ...candidate, quantity: candidate.quantity - quantity } : candidate));
     setQuantities((current) => ({ ...current, [itemId]: 1 }));
     setConfirmation(`${quantity} ${item.unit}${quantity > 1 ? "s" : ""} · ${item.name}`);
-    window.setTimeout(() => setConfirmation(""), 3200);
   }
 
   return (
