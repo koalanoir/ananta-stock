@@ -23,7 +23,7 @@ export default function CountPage() {
   }
 
   return (
-    <AppShell active="count">
+    <AppShell active="stocks">
       <div className="mx-auto max-w-md overflow-hidden rounded-3xl border border-border bg-surface shadow-[0_24px_70px_rgb(57_45_30_/_10%)]">
         <header className="flex items-center border-b border-border px-5 py-5"><Link href="/stocks" aria-label="Retour aux stocks" className="grid h-10 w-10 place-items-center rounded-full bg-surface-muted"><ArrowLeft size={19} /></Link><div className="ml-3"><h1 className="font-semibold">Comptage rapide</h1><p className="mt-0.5 text-xs text-foreground/48">Marché Central</p></div><span className="ml-auto font-mono text-xs font-semibold">{index + 1} / {items.length}</span></header>
         <div className="h-1 bg-surface-muted"><div className="h-full bg-brand transition-all" style={{ width: `${((index + 1) / items.length) * 100}%` }} /></div>

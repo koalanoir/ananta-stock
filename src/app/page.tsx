@@ -14,10 +14,10 @@ export default function DashboardPage() {
   const commercialShare = stockValue ? Math.round((commercialValue / stockValue) * 100) : 0;
 
   return (
-    <AppShell active="dashboard">
+    <AppShell active="performance">
       <PageHeading
         eyebrow="Mercredi 22 juillet"
-        title="Bonjour Dorian,"
+        title="Performance"
         description="Voici l’essentiel de vos stocks aujourd’hui. Les chiffres affichés sont des données de démonstration."
         action={
           <Link href="/stocks?new=1" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-[0_10px_24px_rgb(173_84_38_/_18%)] transition hover:bg-brand-strong">
