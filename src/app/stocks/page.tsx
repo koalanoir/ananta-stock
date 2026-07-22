@@ -71,9 +71,16 @@ function StocksContent() {
       </section>
 
       <section className="mt-6 grid gap-5 xl:grid-cols-[220px_1fr]">
-        <aside className="rounded-2xl border border-border bg-surface p-3 xl:self-start">
+        <label className="rounded-2xl border border-border bg-surface p-4 xl:hidden">
+          <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground/42"><SlidersHorizontal size={14} /> Catégorie</span>
+          <select value={category} onChange={(event) => setCategory(event.target.value)} className="mt-3 h-12 w-full rounded-xl border border-border bg-background px-3 text-sm font-semibold outline-none focus:border-brand focus:ring-3 focus:ring-brand/10">
+            {categories.map((name) => <option key={name} value={name}>{name} ({name === "Toutes" ? items.length : items.filter((item) => item.category === name).length})</option>)}
+          </select>
+        </label>
+
+        <aside className="hidden rounded-2xl border border-border bg-surface p-3 xl:block xl:self-start">
           <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-foreground/42"><SlidersHorizontal size={14} /> Catégories</div>
-          <div className="mt-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 xl:flex-col xl:overflow-visible xl:px-0 xl:pb-0">
+          <div className="mt-1 flex flex-col gap-2">
             {categories.map((name) => <button key={name} onClick={() => setCategory(name)} className={`flex h-10 shrink-0 snap-start items-center justify-between rounded-lg px-3 text-left text-sm font-medium transition ${category === name ? "bg-sidebar text-white" : "hover:bg-surface-muted"}`}>{name}<span className={`ml-3 font-mono text-xs ${category === name ? "text-white/55" : "text-foreground/38"}`}>{name === "Toutes" ? items.length : items.filter((item) => item.category === name).length}</span></button>)}
           </div>
         </aside>
@@ -84,25 +91,19 @@ function StocksContent() {
               const status = getStockStatus(item);
               return (
                 <article key={item.id} className="p-4">
-                  <div className="flex items-start gap-3">
-                    <span className={`mt-1 h-9 w-1 shrink-0 rounded-full ${status === "rupture" ? "bg-danger" : status === "surveillance" ? "bg-warning" : "bg-success"}`} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h2 className="truncate text-sm font-semibold">{item.name}</h2>
-                          <p className="mt-1 text-xs text-foreground/48">{item.category} · {item.kind === "commercialise" ? "Commercialisé" : "Outil"}</p>
-                        </div>
-                        <span className={`shrink-0 rounded-full px-2 py-1 text-[0.65rem] font-semibold ${status === "rupture" ? "bg-danger/10 text-danger" : status === "surveillance" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>{statusLabel[status]}</span>
-                      </div>
-                      <div className="mt-4 flex items-end justify-between gap-3">
-                        <div>
-                          <p className="font-mono text-2xl font-semibold leading-none">{item.quantity}</p>
-                          <p className="mt-1 text-[0.68rem] text-foreground/45">{item.unit}{item.quantity > 1 ? "s" : ""} · seuil {item.threshold}</p>
-                        </div>
-                        <button onClick={() => setEditingItem(item)} className="h-10 rounded-lg border border-border px-3 text-xs font-semibold transition active:scale-95 active:bg-brand/5">Mettre à jour</button>
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${status === "rupture" ? "bg-danger" : status === "surveillance" ? "bg-warning" : "bg-success"}`} />
+                    <span className={`rounded-full px-2 py-1 text-[0.65rem] font-semibold ${status === "rupture" ? "bg-danger/10 text-danger" : status === "surveillance" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>{statusLabel[status]}</span>
                   </div>
+                  <h2 className="mt-3 break-words text-base font-semibold leading-5">{item.name}</h2>
+                  <p className="mt-1.5 text-xs text-foreground/48">{item.category} · {item.kind === "commercialise" ? "Stock commercialisé" : "Outil / consommable"}</p>
+
+                  <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-surface-muted/55 p-3">
+                    <div><dt className="text-[0.65rem] uppercase tracking-[0.08em] text-foreground/42">Disponible</dt><dd className="mt-1 font-mono text-xl font-semibold">{item.quantity} <span className="font-sans text-xs font-normal text-foreground/45">{item.unit}{item.quantity > 1 ? "s" : ""}</span></dd></div>
+                    <div className="border-l border-border pl-3"><dt className="text-[0.65rem] uppercase tracking-[0.08em] text-foreground/42">Seuil d’alerte</dt><dd className="mt-1 font-mono text-xl font-semibold">{item.threshold}</dd></div>
+                  </dl>
+
+                  <button onClick={() => setEditingItem(item)} className="mt-4 h-11 w-full rounded-xl border border-border bg-background text-sm font-semibold transition active:scale-[0.99] active:bg-brand/5">Mettre le stock à jour</button>
                 </article>
               );
             })}
