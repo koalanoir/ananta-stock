@@ -2,10 +2,16 @@ import { redirect } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { SalesClient, type SaleItem } from "./sales-client";
 
+export const dynamic = "force-dynamic";
+
 type Membership = {
   organization_id: string;
   store_id: string | null;
   role: "owner" | "manager" | "seller";
+};
+
+type StoreRow = {
+  name: string;
 };
 
 type ItemRow = {
@@ -63,6 +69,16 @@ export default async function SalesPage() {
     throw new Error("Aucune boutique n’est associée à ce vendeur.");
   }
 
+  const { data: storeData, error: storeError } = await supabase
+    .from("stores")
+    .select("name")
+    .eq("id", membership.store_id)
+    .single();
+
+  if (storeError) {
+    throw new Error(`Impossible de charger la boutique : ${storeError.message}`);
+  }
+
   const { data, error } = await supabase
     .from("items")
     .select(`
@@ -94,5 +110,17 @@ export default async function SalesPage() {
     quantity: Number(item.stock?.quantity ?? 0),
   }));
 
-  return <SalesClient initialItems={items} />;
+  const store = storeData as StoreRow;
+  const userName =
+    String(user.user_metadata?.full_name ?? "").trim() ||
+    String(user.user_metadata?.username ?? "").trim() ||
+    "Vendeur";
+
+  return (
+    <SalesClient
+      initialItems={items}
+      storeName={store.name}
+      userName={userName}
+    />
+  );
 }
