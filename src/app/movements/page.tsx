@@ -7,6 +7,8 @@ import type {
   UserRole,
 } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 const labels: Record<MovementType, string> = {
   entree: "Entrée",
   vente: "Vente",
@@ -131,7 +133,10 @@ export default async function MovementsPage() {
    * - owner/manager : tous les mouvements du magasin ;
    * - seller : uniquement ses propres mouvements.
    */
-  const { data, error } = await supabase
+  const sellerMode =
+    membership.role === "seller";
+
+  let movementsQuery = supabase
     .from("inventory_movements")
     .select(`
       id,
@@ -153,7 +158,13 @@ export default async function MovementsPage() {
         full_name
       )
     `)
-    .eq("store_id", storeId)
+    .eq("store_id", storeId);
+
+  if (sellerMode) {
+    movementsQuery = movementsQuery.eq("created_by", user.id);
+  }
+
+  const { data, error } = await movementsQuery
     .order("created_at", {
       ascending: false,
     })
@@ -168,18 +179,18 @@ export default async function MovementsPage() {
   const movements =
     (data ?? []) as unknown as MovementRow[];
 
-  const sellerMode =
-    membership.role === "seller";
-
   return (
     <AppShell
       active="movements"
       role={sellerMode ? "seller" : "manager"}
+      storeName={storeName}
+      userName={String(user.user_metadata?.full_name ?? "").trim() || String(user.user_metadata?.username ?? "").trim() || user.email || "Utilisateur"}
     >
       <PageHeading
-        title="Mouvements"
-        description={`Historique des variations du stock de ${storeName}.`}
+        title={sellerMode ? "Mes mouvements" : "Mouvements"}
+        description={sellerMode ? "Retrouvez uniquement les ventes et comptages que vous avez enregistrés." : `Historique des variations du stock de ${storeName}.`}
         action={
+          sellerMode ? undefined : (
           <button
             type="button"
             disabled
@@ -189,6 +200,7 @@ export default async function MovementsPage() {
             <Download size={17} />
             Exporter en CSV
           </button>
+          )
         }
       />
 
