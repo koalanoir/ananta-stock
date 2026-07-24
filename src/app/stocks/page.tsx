@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, Suspense, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PackagePlus, Search, SlidersHorizontal, X } from "lucide-react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { demoItems } from "@/lib/demo-data";
 import { getStockStatus, type MovementType, type StockItem } from "@/lib/types";
+import { getCurrentMembership } from "@/lib/data/current-user";
+import { getStockItems } from "@/lib/data/stocks";
 
 type Filter = "all" | "watch" | "rupture";
 
@@ -17,7 +19,47 @@ export default function StocksPage() {
 
 function StocksContent() {
   const searchParams = useSearchParams();
-  const [items, setItems] = useState(demoItems);
+  const [items, setItems] = useState<StockItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    async function loadStocks() {
+      try {
+        const membership = await getCurrentMembership();
+
+        if (!membership.store_id) {
+          throw new Error("Aucun magasin sélectionné.");
+        }
+
+        const rows = await getStockItems(membership.store_id);
+
+        setItems(
+          rows.map((row: { item_id: any; name: any; brand: any; kind: any; unit: any; quantity: any; threshold: any; unit_cost: any; }) => ({
+            id: row.item_id,
+            name: row.name,
+            brand: row.brand,
+            category: "",
+            kind: row.kind,
+            unit: row.unit,
+            quantity: Number(row.quantity),
+            threshold: Number(row.threshold),
+            unitCost: Number(row.unit_cost),
+          })),
+        );
+      } catch (error) {
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "Impossible de charger les stocks.",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    void loadStocks();
+  }, []);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(searchParams.get("filter") === "watch" ? "watch" : "all");
   const [category, setCategory] = useState("Toutes");

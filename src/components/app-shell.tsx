@@ -26,7 +26,7 @@ export function AppShell({ active, role = "manager", children }: AppShellProps) 
   const navigation = isSeller ? sellerNavigation : managerNavigation;
   return (
     <div className="min-h-screen overflow-x-clip lg:grid lg:grid-cols-[236px_1fr]">
-      <aside className="hidden min-h-screen flex-col bg-sidebar px-4 py-6 text-white lg:flex">
+      <aside className="sticky top-0 hidden h-screen self-start flex-col overflow-y-auto bg-sidebar px-4 py-6 text-white lg:flex">
         <Link href="/" className="px-3" aria-label="Accueil Ananta Stock">
           <span className="block text-[1.75rem] font-bold tracking-[0.13em]">ANANTA</span>
           <span className="mt-0.5 block text-[0.68rem] tracking-[0.42em] text-[#e9b18d]">STOCK</span>

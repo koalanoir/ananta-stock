@@ -1,6 +1,11 @@
 export type StockKind = "commercialise" | "outil";
 export type StockStatus = "ok" | "surveillance" | "rupture";
-export type MovementType = "entree" | "sortie" | "perte" | "ajustement";
+export type MovementType =
+  | "entree"
+  | "vente"
+  | "sortie"
+  | "perte"
+  | "ajustement";
 
 export type StockItem = {
   id: string;
