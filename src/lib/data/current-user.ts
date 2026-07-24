@@ -45,5 +45,8 @@ export async function getCurrentMembership() {
     throw new Error("Aucun commerce associé à cet utilisateur.");
   }
 
-  return data;
+  return {
+    ...data,
+    user,
+  };
 }
