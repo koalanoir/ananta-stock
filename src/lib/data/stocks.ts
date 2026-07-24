@@ -11,6 +11,7 @@ export type StockOverviewRow = {
   selling_price: number | string;
   quantity: number | string;
   stock_status: "ok" | "surveillance" | "rupture";
+  category_name: string;
 };
 
 export async function getStockItems(storeId: string): Promise<StockOverviewRow[]> {
@@ -32,7 +33,8 @@ export async function getStockItems(storeId: string): Promise<StockOverviewRow[]
       unit_cost,
       selling_price,
       quantity,
-      stock_status
+      stock_status,
+      category_name
     `)
     .eq("store_id", storeId)
     .order("name");
