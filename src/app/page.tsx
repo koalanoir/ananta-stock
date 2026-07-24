@@ -14,6 +14,8 @@ import {
   type MovementType,
 } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 const movementLabels: Record<MovementType, string> = {
   entree: "Entrée",
   vente: "Vente",
@@ -182,6 +184,8 @@ export default async function DashboardPage() {
    * d’une autre entreprise.
    */
   const movementsSince = new Date(
+    // Server-side request time used to bound the activity query.
+    // eslint-disable-next-line react-hooks/purity
     Date.now() - 36 * 60 * 60 * 1000,
   ).toISOString();
 
@@ -308,7 +312,11 @@ export default async function DashboardPage() {
   );
 
   return (
-    <AppShell active="performance">
+    <AppShell
+      active="performance"
+      storeName={storeName}
+      userName={String(user.user_metadata?.full_name ?? "").trim() || user.email || "Gestionnaire"}
+    >
       <PageHeading
         eyebrow={todayLabel}
         title="Performance"
