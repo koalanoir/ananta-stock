@@ -24,9 +24,11 @@ export type SaleItem = {
 
 type SalesClientProps = {
   initialItems: SaleItem[];
+  storeName: string;
+  userName: string;
 };
 
-export function SalesClient({ initialItems }: SalesClientProps) {
+export function SalesClient({ initialItems, storeName, userName }: SalesClientProps) {
   const [items, setItems] = useState(initialItems);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Toutes");
@@ -169,7 +171,7 @@ export function SalesClient({ initialItems }: SalesClientProps) {
   }
 
   return (
-    <AppShell active="sales" role="seller">
+    <AppShell active="sales" role="seller" storeName={storeName} userName={userName}>
       <PageHeading
         eyebrow="Mode vendeur"
         title="Enregistrer une vente"
