@@ -1,22 +1,29 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const publicRoutes = [
+  "/login",
+  "/register",
+  "/auth/callback",
+  "/api/auth/seller-login",
+];
+
 export async function proxy(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publishableKey =
+  let response = NextResponse.next({ request });
+
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  const supabaseKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-  if (!supabaseUrl || !publishableKey) {
-    return NextResponse.next();
+  if (!supabaseUrl || !supabaseKey) {
+    return response;
   }
-
-  let response = NextResponse.next({
-    request,
-  });
 
   const supabase = createServerClient(
     supabaseUrl,
-    publishableKey,
+    supabaseKey,
     {
       cookies: {
         getAll() {
@@ -28,34 +35,44 @@ export async function proxy(request: NextRequest) {
             request.cookies.set(name, value);
           });
 
-          response = NextResponse.next({
-            request,
-          });
+          response = NextResponse.next({ request });
 
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
+          cookiesToSet.forEach(
+            ({ name, value, options }) => {
+              response.cookies.set(
+                name,
+                value,
+                options,
+              );
+            },
+          );
         },
       },
     },
   );
 
-  const { data, error } = await supabase.auth.getClaims();
-  const isAuthenticated = !error && Boolean(data?.claims);
-  const isLoginPage = request.nextUrl.pathname === "/login";
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!isAuthenticated && !isLoginPage) {
+  const pathname = request.nextUrl.pathname;
+
+  const isPublicRoute = publicRoutes.some(
+    (route) =>
+      pathname === route ||
+      pathname.startsWith(`${route}/`),
+  );
+
+  if (!user && !isPublicRoute) {
     const loginUrl = request.nextUrl.clone();
+
     loginUrl.pathname = "/login";
+    loginUrl.searchParams.set(
+      "next",
+      `${pathname}${request.nextUrl.search}`,
+    );
 
     return NextResponse.redirect(loginUrl);
-  }
-
-  if (isAuthenticated && isLoginPage) {
-    const dashboardUrl = request.nextUrl.clone();
-    dashboardUrl.pathname = "/";
-
-    return NextResponse.redirect(dashboardUrl);
   }
 
   return response;
@@ -63,6 +80,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

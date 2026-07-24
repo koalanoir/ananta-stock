@@ -13,10 +13,10 @@ type Membership = {
 
 type SellerMembershipRow = {
   user_id: string;
+  username: string | null;
   active: boolean;
   profile: {
     full_name: string;
-    email: string;
   } | null;
 };
 
@@ -38,33 +38,51 @@ type OpenSessionRow = {
   opened_at: string;
 };
 
-function dateInTimezone(timezone: string) {
-  const parts = new Intl.DateTimeFormat("fr-FR", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
+function dateInTimezone(
+  timezone: string,
+) {
+  const parts =
+    new Intl.DateTimeFormat("fr-FR", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
 
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
+  const year = parts.find(
+    (part) => part.type === "year",
+  )?.value;
+
+  const month = parts.find(
+    (part) => part.type === "month",
+  )?.value;
+
+  const day = parts.find(
+    (part) => part.type === "day",
+  )?.value;
 
   return `${year}-${month}-${day}`;
 }
 
-function formatTime(value: string | null, timezone: string) {
+function formatTime(
+  value: string | null,
+  timezone: string,
+) {
   if (!value) return null;
 
-  return new Intl.DateTimeFormat("fr-FR", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return new Intl.DateTimeFormat(
+    "fr-FR",
+    {
+      timeZone: timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  ).format(new Date(value));
 }
 
 export default async function SettingsPage() {
-  const supabase = await getSupabaseServerClient();
+  const supabase =
+    await getSupabaseServerClient();
 
   if (!supabase) {
     throw new Error(
@@ -80,9 +98,14 @@ export default async function SettingsPage() {
     redirect("/login");
   }
 
-  const { data: membershipData, error: membershipError } = await supabase
+  const {
+    data: membershipData,
+    error: membershipError,
+  } = await supabase
     .from("memberships")
-    .select("organization_id, store_id, role")
+    .select(
+      "organization_id, store_id, role",
+    )
     .eq("user_id", user.id)
     .eq("active", true)
     .in("role", ["owner", "manager"])
@@ -95,43 +118,64 @@ export default async function SettingsPage() {
     );
   }
 
-  const membership = membershipData as Membership | null;
+  const membership =
+    membershipData as Membership | null;
 
-    // Les vendeurs ne doivent pas accéder à l’administration.
   if (!membership) {
     redirect("/sales");
   }
 
-  if (membership.role !== "owner" && membership.role !== "manager") {
+  if (
+    membership.role !== "owner" &&
+    membership.role !== "manager"
+  ) {
     redirect("/sales");
   }
+
+  const administratorRole:
+    | "owner"
+    | "manager" =
+    membership.role === "owner"
+      ? "owner"
+      : "manager";
 
   let storeId = membership.store_id;
 
   if (!storeId) {
-    const { data: storeData, error: storeError } = await supabase
+    const {
+      data: firstStore,
+      error: firstStoreError,
+    } = await supabase
       .from("stores")
       .select("id")
-      .eq("organization_id", membership.organization_id)
+      .eq(
+        "organization_id",
+        membership.organization_id,
+      )
       .eq("active", true)
       .order("created_at")
       .limit(1)
       .maybeSingle();
 
-    if (storeError) {
+    if (firstStoreError) {
       throw new Error(
-        `Impossible de charger la boutique : ${storeError.message}`,
+        `Impossible de charger la boutique : ${firstStoreError.message}`,
       );
     }
 
-    storeId = storeData?.id ?? null;
+    storeId = firstStore?.id ?? null;
   }
 
   if (!storeId) {
-    throw new Error("Aucune boutique active n’est disponible.");
+    throw new Error(
+      "Aucune boutique active n’est disponible.",
+    );
   }
 
-  const { data: storeData, error: storeError } = await supabase
+  const {
+    data: storeData,
+    error: storeError,
+  } = await supabase
     .from("stores")
     .select("name, timezone")
     .eq("id", storeId)
@@ -143,8 +187,12 @@ export default async function SettingsPage() {
     );
   }
 
-  const timezone = storeData.timezone || "Africa/Brazzaville";
-  const today = dateInTimezone(timezone);
+  const timezone =
+    storeData.timezone ||
+    "Africa/Brazzaville";
+
+  const today =
+    dateInTimezone(timezone);
 
   const [
     sellersResult,
@@ -156,35 +204,58 @@ export default async function SettingsPage() {
       .from("memberships")
       .select(`
         user_id,
+        username,
         active,
         profile:profiles!memberships_user_id_fkey(
-          full_name,
-          email
+          full_name
         )
       `)
-      .eq("organization_id", membership.organization_id)
+      .eq(
+        "organization_id",
+        membership.organization_id,
+      )
       .eq("store_id", storeId)
       .eq("role", "seller")
       .eq("active", true),
 
     supabase
       .from("daily_work_hours")
-      .select("user_id, first_arrival, last_departure, hours_worked")
-      .eq("organization_id", membership.organization_id)
+      .select(`
+        user_id,
+        first_arrival,
+        last_departure,
+        hours_worked
+      `)
+      .eq(
+        "organization_id",
+        membership.organization_id,
+      )
       .eq("store_id", storeId)
       .eq("work_date", today),
 
     supabase
-      .from("daily_seller_performance")
-      .select("seller_id, sales_count, units_sold")
-      .eq("organization_id", membership.organization_id)
+      .from(
+        "daily_seller_performance",
+      )
+      .select(`
+        seller_id,
+        sales_count,
+        units_sold
+      `)
+      .eq(
+        "organization_id",
+        membership.organization_id,
+      )
       .eq("store_id", storeId)
       .eq("sale_date", today),
 
     supabase
       .from("work_sessions")
       .select("user_id, opened_at")
-      .eq("organization_id", membership.organization_id)
+      .eq(
+        "organization_id",
+        membership.organization_id,
+      )
       .eq("store_id", storeId)
       .is("closed_at", null),
   ]);
@@ -201,69 +272,129 @@ export default async function SettingsPage() {
     );
   }
 
-  const sellerRows = (sellersResult.data ?? []) as unknown as SellerMembershipRow[];
-  const workRows = (workHoursResult.data ?? []) as WorkHoursRow[];
-  const performanceRows = (performanceResult.data ?? []) as PerformanceRow[];
-  const openRows = (openSessionsResult.data ?? []) as OpenSessionRow[];
+  const sellerRows =
+    (sellersResult.data ??
+      []) as unknown as SellerMembershipRow[];
+
+  const workRows =
+    (workHoursResult.data ??
+      []) as WorkHoursRow[];
+
+  const performanceRows =
+    (performanceResult.data ??
+      []) as PerformanceRow[];
+
+  const openRows =
+    (openSessionsResult.data ??
+      []) as OpenSessionRow[];
 
   const hoursByUser = new Map(
-    workRows.map((row) => [row.user_id, row]),
+    workRows.map((row) => [
+      row.user_id,
+      row,
+    ]),
   );
 
   const performanceByUser = new Map(
-    performanceRows.map((row) => [row.seller_id, row]),
+    performanceRows.map((row) => [
+      row.seller_id,
+      row,
+    ]),
   );
 
   const openSessionsByUser = new Map(
-    openRows.map((row) => [row.user_id, row]),
+    openRows.map((row) => [
+      row.user_id,
+      row,
+    ]),
   );
 
-  const sellers: SellerSummary[] = sellerRows.map((seller) => {
-    const work = hoursByUser.get(seller.user_id);
-    const performance = performanceByUser.get(seller.user_id);
-    const openSession = openSessionsByUser.get(seller.user_id);
+  const sellers: SellerSummary[] =
+    sellerRows.map((seller) => {
+      const work =
+        hoursByUser.get(
+          seller.user_id,
+        );
 
-    const arrival = formatTime(
-      work?.first_arrival ?? openSession?.opened_at ?? null,
-      timezone,
-    );
+      const performance =
+        performanceByUser.get(
+          seller.user_id,
+        );
 
-    const departure = formatTime(
-      work?.last_departure ?? null,
-      timezone,
-    );
+      const openSession =
+        openSessionsByUser.get(
+          seller.user_id,
+        );
 
-    let hours = "Aucun horaire aujourd’hui";
+      const arrival = formatTime(
+        work?.first_arrival ??
+          openSession?.opened_at ??
+          null,
+        timezone,
+      );
 
-    if (openSession && arrival) {
-      hours = `${arrival} – maintenant`;
-    } else if (arrival && departure) {
-      hours = `${arrival} – ${departure}`;
-    } else if (arrival) {
-      hours = arrival;
-    }
+      const departure = formatTime(
+        work?.last_departure ?? null,
+        timezone,
+      );
 
-    return {
-      id: seller.user_id,
-      name:
-        seller.profile?.full_name ||
-        seller.profile?.email ||
-        "Vendeur sans nom",
-      email: seller.profile?.email ?? "",
-      status: openSession ? "En poste" : "Hors ligne",
-      hours,
-      hoursWorked: Number(work?.hours_worked ?? 0),
-      sales: Number(performance?.sales_count ?? 0),
-      unitsSold: Number(performance?.units_sold ?? 0),
-    };
-  });
+      let hours =
+        "Aucun horaire aujourd’hui";
+
+      if (openSession && arrival) {
+        hours = `${arrival} – maintenant`;
+      } else if (
+        arrival &&
+        departure
+      ) {
+        hours =
+          `${arrival} – ${departure}`;
+      } else if (arrival) {
+        hours = arrival;
+      }
+
+      return {
+        id: seller.user_id,
+
+        name:
+          seller.profile?.full_name ||
+          seller.username ||
+          "Vendeur sans nom",
+
+        username:
+          seller.username ??
+          "sans-identifiant",
+
+        status: openSession
+          ? "En poste"
+          : "Hors ligne",
+
+        hours,
+
+        hoursWorked: Number(
+          work?.hours_worked ?? 0,
+        ),
+
+        sales: Number(
+          performance?.sales_count ??
+            0,
+        ),
+
+        unitsSold: Number(
+          performance?.units_sold ??
+            0,
+        ),
+      };
+    });
 
   return (
     <SettingsClient
-      organizationId={membership.organization_id}
+      organizationId={
+        membership.organization_id
+      }
       storeId={storeId}
       storeName={storeData.name}
-      role={membership.role}
+      role={administratorRole}
       initialSellers={sellers}
     />
   );

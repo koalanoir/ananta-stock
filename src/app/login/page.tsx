@@ -1,6 +1,10 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import Link from "next/link";
+import {
+  FormEvent,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   Eye,
@@ -8,282 +12,454 @@ import {
   LoaderCircle,
   LockKeyhole,
   Mail,
-  ShieldCheck,
 } from "lucide-react";
+import { SellerLoginForm } from "@/components/seller-login-form";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+type Membership = {
+  role: "owner" | "manager" | "seller";
+};
+
+type LoginMode = "manager" | "seller";
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loginMode, setLoginMode] =
+    useState<LoginMode>("manager");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const [email, setEmail] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [showPassword, setShowPassword] =
+    useState(false);
+
+  const [pending, setPending] =
+    useState(false);
+
+  const [errorMessage, setErrorMessage] =
+    useState("");
+
+  function changeLoginMode(mode: LoginMode) {
+    setLoginMode(mode);
+    setErrorMessage("");
+  }
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
-    setError("");
-    setIsLoading(true);
-
-    const supabase = getSupabaseBrowserClient();
+    const supabase =
+      getSupabaseBrowserClient();
 
     if (!supabase) {
-      setError(
-        "La connexion à Supabase n’est pas configurée. Vérifiez votre fichier .env.local.",
+      setErrorMessage(
+        "Supabase n’est pas configuré.",
       );
-      setIsLoading(false);
       return;
     }
 
-    // 1. Authentification avec Supabase
-    const {
-      data: loginData,
-      error: loginError,
-    } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
+    setPending(true);
+    setErrorMessage("");
 
-    if (loginError || !loginData.user) {
-      setError("Adresse e-mail ou mot de passe incorrect.");
-      setIsLoading(false);
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+    if (error) {
+      setPending(false);
+      setErrorMessage(
+        "Adresse e-mail ou mot de passe incorrect.",
+      );
       return;
     }
 
-    // 2. Récupération du rôle de l’utilisateur
-    const { data: membership, error: membershipError } = await supabase
+    let {
+      data: membershipData,
+      error: membershipError,
+    } = await supabase
       .from("memberships")
-      .select(`
-        role,
-        organization_id,
-        organizations (
-          name
-        )
-      `)
-      .eq("user_id", loginData.user.id)
+      .select("role")
+      .eq("user_id", data.user.id)
+      .eq("active", true)
       .limit(1)
       .maybeSingle();
 
-    if (membershipError || !membership) {
+    if (membershipError) {
       await supabase.auth.signOut();
 
-      setError(
-        "Votre compte n’est associé à aucun commerce. Contactez votre gestionnaire.",
+      setPending(false);
+
+      setErrorMessage(
+        `Impossible de vérifier votre accès : ${membershipError.message}`,
       );
 
-      setIsLoading(false);
       return;
     }
 
-    // 3. Redirection selon le rôle
-    if (membership.role === "seller") {
-      router.replace("/sales");
-    } else {
-      router.replace("/");
+    /*
+     * Récupération d’un propriétaire dont l’e-mail
+     * a été confirmé sans passer par le callback.
+     */
+    if (
+      !membershipData &&
+      data.user.user_metadata
+        ?.account_type === "owner"
+    ) {
+      const organizationName = String(
+        data.user.user_metadata
+          ?.organization_name ?? "",
+      ).trim();
+
+      const storeName = String(
+        data.user.user_metadata
+          ?.store_name ?? "",
+      ).trim();
+
+      if (organizationName && storeName) {
+        const { error: onboardingError } =
+          await supabase.rpc(
+            "create_organization",
+            {
+              organization_name:
+                organizationName,
+              store_name: storeName,
+            },
+          );
+
+        if (onboardingError) {
+          await supabase.auth.signOut();
+
+          setPending(false);
+
+          setErrorMessage(
+            `Votre compte est confirmé, mais votre commerce n’a pas pu être créé : ${onboardingError.message}`,
+          );
+
+          return;
+        }
+
+        const membershipResult =
+          await supabase
+            .from("memberships")
+            .select("role")
+            .eq(
+              "user_id",
+              data.user.id,
+            )
+            .eq("active", true)
+            .limit(1)
+            .maybeSingle();
+
+        membershipData =
+          membershipResult.data;
+
+        membershipError =
+          membershipResult.error;
+      }
     }
 
+    if (
+      membershipError ||
+      !membershipData
+    ) {
+      await supabase.auth.signOut();
+
+      setPending(false);
+
+      setErrorMessage(
+        membershipError
+          ? `Impossible de vérifier votre accès : ${membershipError.message}`
+          : "Votre compte n’est associé à aucun commerce.",
+      );
+
+      return;
+    }
+
+    const membership =
+      membershipData as Membership;
+
+    const requestedDestination =
+      new URLSearchParams(
+        window.location.search,
+      ).get("next");
+
+    const safeDestination =
+      requestedDestination?.startsWith(
+        "/",
+      ) &&
+      !requestedDestination.startsWith(
+        "//",
+      )
+        ? requestedDestination
+        : membership.role === "seller"
+          ? "/sales"
+          : "/";
+
+    setPending(false);
+
+    router.replace(safeDestination);
     router.refresh();
   }
 
   return (
-    <main className="grid min-h-screen bg-background lg:grid-cols-[1fr_1.05fr]">
-      {/* Présentation desktop */}
-      <section className="relative hidden overflow-hidden bg-sidebar p-12 text-white lg:flex lg:flex-col">
-        <div
-          className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-brand/15 blur-3xl"
-          aria-hidden="true"
-        />
-
-        <div
-          className="pointer-events-none absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-white/5 blur-3xl"
-          aria-hidden="true"
-        />
-
-        <div className="relative z-10">
-          <p className="text-3xl font-bold tracking-[0.15em]">
+    <main className="grid min-h-screen bg-background lg:grid-cols-[0.85fr_1.15fr]">
+      <section className="hidden bg-sidebar p-12 text-white lg:flex lg:flex-col">
+        <Link
+          href="/"
+          aria-label="Accueil Ananta Stock"
+        >
+          <span className="block text-3xl font-bold tracking-[0.13em]">
             ANANTA
-          </p>
+          </span>
 
-          <p className="mt-1 text-xs tracking-[0.45em] text-[#e9b18d]">
+          <span className="mt-1 block text-xs tracking-[0.42em] text-[#e9b18d]">
             STOCK
-          </p>
-        </div>
+          </span>
+        </Link>
 
-        <div className="relative z-10 my-auto max-w-lg">
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/50">
-            Gestion simplifiée
+        <div className="my-auto max-w-md">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#e9b18d]">
+            Bon retour
           </p>
 
           <h1 className="mt-5 text-4xl font-semibold leading-tight">
-            Votre commerce sous contrôle, à chaque instant.
+            Vos stocks et vos ventes, au même
+            endroit.
           </h1>
 
-          <p className="mt-5 max-w-md leading-7 text-white/60">
-            Enregistrez les ventes, suivez les mouvements et consultez les
-            performances de votre activité depuis un espace sécurisé.
+          <p className="mt-5 leading-7 text-white/65">
+            Connectez-vous pour accéder à votre
+            boutique et reprendre votre activité.
           </p>
-
-          <div className="mt-10 space-y-4">
-            <Feature text="Mise à jour rapide des stocks" />
-            <Feature text="Accès adapté à chaque utilisateur" />
-            <Feature text="Historique complet des mouvements" />
-          </div>
         </div>
-
-        <p className="relative z-10 text-xs text-white/35">
-          Une solution Ananta Group
-        </p>
       </section>
 
-      {/* Formulaire */}
-      <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
+      <section className="flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-md">
-          {/* Logo mobile */}
-          <div className="mb-10 lg:hidden">
-            <p className="text-2xl font-bold tracking-[0.13em]">
-              ANANTA <span className="text-brand">STOCK</span>
-            </p>
-          </div>
+          <Link
+            href="/"
+            className="font-bold tracking-[0.12em] lg:hidden"
+          >
+            ANANTA{" "}
+            <span className="text-brand">
+              STOCK
+            </span>
+          </Link>
 
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand/10 text-brand-strong">
-            <ShieldCheck size={21} />
-          </div>
-
-          <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-brand-strong">
-            Espace sécurisé
+          <p className="mt-8 text-xs font-semibold uppercase tracking-[0.16em] text-brand-strong lg:mt-0">
+            Connexion
           </p>
 
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-            Se connecter
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
+            Accéder à votre espace
           </h2>
 
-          <p className="mt-2 text-sm leading-6 text-foreground/55">
-            Utilisez les identifiants associés à votre commerce.
+          <p className="mt-3 text-sm leading-6 text-foreground/55">
+            {loginMode === "manager"
+              ? "Connectez-vous avec l’adresse e-mail associée à votre organisation."
+              : "Connectez-vous avec le code de votre boutique, votre identifiant et votre PIN."}
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            {/* E-mail */}
-            <label className="block">
-              <span className="text-sm font-semibold">
-                Adresse e-mail
-              </span>
+          <div className="mt-8 grid grid-cols-2 rounded-xl bg-surface-muted p-1">
+            <button
+              type="button"
+              onClick={() =>
+                changeLoginMode("manager")
+              }
+              className={`h-10 rounded-lg text-sm font-semibold transition ${
+                loginMode === "manager"
+                  ? "bg-surface text-foreground shadow-sm"
+                  : "text-foreground/50 hover:text-foreground/70"
+              }`}
+            >
+              Gestionnaire
+            </button>
 
-              <span className="relative mt-2 block">
-                <Mail
-                  size={18}
-                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-foreground/35"
-                  aria-hidden="true"
-                />
+            <button
+              type="button"
+              onClick={() =>
+                changeLoginMode("seller")
+              }
+              className={`h-10 rounded-lg text-sm font-semibold transition ${
+                loginMode === "seller"
+                  ? "bg-surface text-foreground shadow-sm"
+                  : "text-foreground/50 hover:text-foreground/70"
+              }`}
+            >
+              Vendeur
+            </button>
+          </div>
 
-                <input
-                  required
-                  autoFocus
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="nom@commerce.com"
-                  className="h-13 w-full rounded-xl border border-border bg-surface pl-11 pr-4 text-sm outline-none transition placeholder:text-foreground/30 focus:border-brand focus:ring-3 focus:ring-brand/10"
-                />
-              </span>
-            </label>
+          {loginMode === "manager" ? (
+            <>
+              <form
+                onSubmit={handleSubmit}
+                className="mt-6 space-y-5"
+              >
+                <Field
+                  id="login-email"
+                  label="Adresse e-mail"
+                  icon={<Mail size={18} />}
+                >
+                  <input
+                    id="login-email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) =>
+                      setEmail(
+                        event.target.value,
+                      )
+                    }
+                    placeholder="vous@entreprise.com"
+                    className={inputClass}
+                  />
+                </Field>
 
-            {/* Mot de passe */}
-            <label className="block">
-              <span className="text-sm font-semibold">
-                Mot de passe
-              </span>
+                <Field
+                  id="login-password"
+                  label="Mot de passe"
+                  icon={
+                    <LockKeyhole size={18} />
+                  }
+                >
+                  <input
+                    id="login-password"
+                    type={
+                      showPassword
+                        ? "text"
+                        : "password"
+                    }
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) =>
+                      setPassword(
+                        event.target.value,
+                      )
+                    }
+                    placeholder="Votre mot de passe"
+                    className={`${inputClass} pr-12`}
+                  />
 
-              <span className="relative mt-2 block">
-                <LockKeyhole
-                  size={18}
-                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-foreground/35"
-                  aria-hidden="true"
-                />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword(
+                        (current) =>
+                          !current,
+                      )
+                    }
+                    aria-label={
+                      showPassword
+                        ? "Masquer le mot de passe"
+                        : "Afficher le mot de passe"
+                    }
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-foreground/40"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={18} />
+                    ) : (
+                      <Eye size={18} />
+                    )}
+                  </button>
+                </Field>
 
-                <input
-                  required
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Votre mot de passe"
-                  className="h-13 w-full rounded-xl border border-border bg-surface pl-11 pr-12 text-sm outline-none transition placeholder:text-foreground/30 focus:border-brand focus:ring-3 focus:ring-brand/10"
-                />
+                {errorMessage ? (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm font-medium text-danger"
+                  >
+                    {errorMessage}
+                  </div>
+                ) : null}
 
                 <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  aria-label={
-                    showPassword
-                      ? "Masquer le mot de passe"
-                      : "Afficher le mot de passe"
-                  }
-                  className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg text-foreground/45 transition hover:bg-surface-muted hover:text-foreground"
+                  type="submit"
+                  disabled={pending}
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {showPassword ? (
-                    <EyeOff size={18} />
+                  {pending ? (
+                    <>
+                      <LoaderCircle
+                        className="animate-spin"
+                        size={18}
+                      />
+                      Connexion…
+                    </>
                   ) : (
-                    <Eye size={18} />
+                    "Se connecter"
                   )}
                 </button>
-              </span>
-            </label>
+              </form>
 
-            {/* Erreur */}
-            {error ? (
-              <p
-                role="alert"
-                className="rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm leading-5 text-danger"
-              >
-                {error}
+              <p className="mt-7 text-center text-sm text-foreground/55">
+                Vous n’avez pas encore de
+                compte ?{" "}
+                <Link
+                  href="/register"
+                  className="font-semibold text-brand-strong hover:underline"
+                >
+                  Créer un espace
+                </Link>
               </p>
-            ) : null}
+            </>
+          ) : (
+            <>
+              <div className="mt-6">
+                <SellerLoginForm />
+              </div>
 
-            {/* Connexion */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="inline-flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-brand font-semibold text-white shadow-[0_10px_24px_rgb(173_84_38_/_18%)] transition hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isLoading ? (
-                <>
-                  <LoaderCircle
-                    size={18}
-                    className="animate-spin"
-                    aria-hidden="true"
-                  />
-                  Connexion…
-                </>
-              ) : (
-                "Se connecter"
-              )}
-            </button>
-          </form>
-
-          <div className="mt-8 border-t border-border pt-6 text-center">
-            <p className="text-xs leading-5 text-foreground/45">
-              Vous avez perdu vos identifiants ?
-              <br />
-              Contactez le gestionnaire de votre commerce.
-            </p>
-          </div>
+              <p className="mt-7 text-center text-xs leading-5 text-foreground/45">
+                Votre compte vendeur est créé par
+                le gestionnaire de votre boutique.
+              </p>
+            </>
+          )}
         </div>
       </section>
     </main>
   );
 }
 
-function Feature({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-3 text-sm text-white/75">
-      <span className="grid h-6 w-6 place-items-center rounded-full bg-white/10">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#e9b18d]" />
-      </span>
+const inputClass =
+  "h-12 w-full rounded-xl border border-border bg-surface pl-11 pr-4 text-sm outline-none transition focus:border-brand focus:ring-3 focus:ring-brand/10";
 
-      <span>{text}</span>
+function Field({
+  id,
+  label,
+  icon,
+  children,
+}: {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="text-sm font-semibold"
+      >
+        {label}
+      </label>
+
+      <div className="relative mt-2">
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-foreground/35">
+          {icon}
+        </span>
+
+        {children}
+      </div>
     </div>
   );
 }
