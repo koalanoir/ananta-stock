@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { BarChart3, Boxes, History, Settings, ShoppingCart } from "lucide-react";
+import { BarChart3, Boxes, ClipboardCheck, History, Settings, ShoppingCart } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 
 type AppShellProps = {
   active: "performance" | "sales" | "stocks" | "movements" | "settings";
   role?: UserRole;
+  storeName?: string;
+  userName?: string;
   children: React.ReactNode;
 };
 
@@ -17,11 +19,11 @@ const managerNavigation = [
 
 const sellerNavigation = [
   { key: "sales", label: "Ventes", href: "/sales", icon: ShoppingCart },
-  { key: "stocks", label: "Stocks", href: "/stocks?role=seller", icon: Boxes },
-  { key: "movements", label: "Mouvements", href: "/movements?role=seller", icon: History },
+  { key: "stocks", label: "Comptage rapide", href: "/count", icon: ClipboardCheck },
+  { key: "movements", label: "Mes mouvements", href: "/movements", icon: History },
 ] as const;
 
-export function AppShell({ active, role = "manager", children }: AppShellProps) {
+export function AppShell({ active, role = "manager", storeName = "Ma boutique", userName = "Utilisateur", children }: AppShellProps) {
   const isSeller = role === "seller";
   const navigation = isSeller ? sellerNavigation : managerNavigation;
   return (
@@ -53,15 +55,15 @@ export function AppShell({ active, role = "manager", children }: AppShellProps) 
 
         <div className="mt-auto rounded-2xl border border-white/10 bg-white/6 p-3">
           <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-white/48">BOUTIQUE</p>
-          <p className="mt-2 text-sm font-semibold">Marché Central</p>
-          <p className="mt-1 text-xs text-white/55">{isSeller ? "Aïcha · Vendeuse" : "Dorian · Gestionnaire"}</p>
+          <p className="mt-2 truncate text-sm font-semibold" title={storeName}>{storeName}</p>
+          <p className="mt-1 truncate text-xs text-white/55" title={userName}>{userName} · {isSeller ? "Vendeur" : "Gestionnaire"}</p>
         </div>
       </aside>
 
       <div className="min-w-0">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/80 bg-surface/92 px-4 backdrop-blur lg:hidden">
           <Link href="/" className="font-bold tracking-[0.12em]">ANANTA <span className="text-brand">STOCK</span></Link>
-          <span className="rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium">Marché Central</span>
+          <span className="max-w-[48vw] truncate rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium">{storeName}</span>
         </header>
         <main className="mx-auto w-full max-w-[1240px] px-4 py-6 pb-24 sm:px-7 lg:px-10 lg:py-10 lg:pb-10">{children}</main>
 
