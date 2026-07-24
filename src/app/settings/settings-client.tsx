@@ -30,6 +30,7 @@ type SettingsClientProps = {
   organizationId: string;
   storeId: string;
   storeName: string;
+  userName: string;
   role: Extract<UserRole, "owner" | "manager">;
   initialSellers: SellerSummary[];
 };
@@ -38,6 +39,7 @@ export function SettingsClient({
   organizationId,
   storeId,
   storeName,
+  userName,
   role,
   initialSellers,
 }: SettingsClientProps) {
@@ -140,6 +142,8 @@ export function SettingsClient({
     <AppShell
       active="settings"
       role={role}
+      storeName={storeName}
+      userName={userName}
     >
       <PageHeading
         eyebrow="Administration"
