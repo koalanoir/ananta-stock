@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Banknote,
   CircleAlert,
   PackagePlus,
   TrendingUp,
+  TriangleAlert,
 } from "lucide-react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -47,6 +49,7 @@ type MovementRow = {
   id: string;
   type: MovementType;
   quantity_delta: number | string;
+  reason: string | null;
   created_at: string;
   item: {
     name: string;
@@ -55,6 +58,21 @@ type MovementRow = {
   author: {
     full_name: string;
   } | null;
+};
+
+type SaleRow = {
+  id: string;
+  total_amount: number | string;
+  sale_items: Array<{
+    quantity: number | string;
+    line_total: number | string;
+    item: { id: string; name: string; brand: string } | null;
+  }>;
+};
+
+type LossRow = {
+  quantity_delta: number | string;
+  item: { unit_cost: number | string } | null;
 };
 
 type MembershipRow = {
@@ -71,7 +89,17 @@ type MembershipRow = {
   } | null;
 };
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<{ period?: string }>;
+};
+
+export default async function DashboardPage({
+  searchParams,
+}: DashboardPageProps) {
+  const requestedPeriod = Number((await searchParams).period);
+  const periodDays = [7, 30, 90].includes(requestedPeriod)
+    ? requestedPeriod
+    : 30;
   const supabase = await getSupabaseServerClient();
 
   if (!supabase) {
@@ -188,8 +216,18 @@ export default async function DashboardPage() {
     // eslint-disable-next-line react-hooks/purity
     Date.now() - 36 * 60 * 60 * 1000,
   ).toISOString();
+  const performanceSince = new Date(
+    // Server-side request time used to calculate the selected period.
+    // eslint-disable-next-line react-hooks/purity
+    Date.now() - periodDays * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
-  const [stockResponse, movementResponse] = await Promise.all([
+  const [
+    stockResponse,
+    movementResponse,
+    salesResponse,
+    lossesResponse,
+  ] = await Promise.all([
     supabase
       .from("stock_overview")
       .select(`
@@ -217,6 +255,7 @@ export default async function DashboardPage() {
         id,
         type,
         quantity_delta,
+        reason,
         created_at,
         item:items!inventory_movements_item_id_fkey (
           name,
@@ -229,6 +268,37 @@ export default async function DashboardPage() {
       .eq("store_id", storeId)
       .gte("created_at", movementsSince)
       .order("created_at", { ascending: false }),
+
+    supabase
+      .from("sales")
+      .select(`
+        id,
+        total_amount,
+        sale_items (
+          quantity,
+          line_total,
+          item:items (
+            id,
+            name,
+            brand
+          )
+        )
+      `)
+      .eq("store_id", storeId)
+      .eq("status", "completed")
+      .gte("created_at", performanceSince),
+
+    supabase
+      .from("inventory_movements")
+      .select(`
+        quantity_delta,
+        item:items!inventory_movements_item_id_fkey (
+          unit_cost
+        )
+      `)
+      .eq("store_id", storeId)
+      .eq("type", "perte")
+      .gte("created_at", performanceSince),
   ]);
 
   if (stockResponse.error) {
@@ -243,11 +313,66 @@ export default async function DashboardPage() {
     );
   }
 
+  if (salesResponse.error) {
+    throw new Error(
+      `Impossible de charger le chiffre d’affaires : ${salesResponse.error.message}`,
+    );
+  }
+
+  if (lossesResponse.error) {
+    throw new Error(
+      `Impossible de charger les pertes : ${lossesResponse.error.message}`,
+    );
+  }
+
   const stockItems = (stockResponse.data ?? []) as StockRow[];
 
   const movements = (
     movementResponse.data ?? []
   ) as unknown as MovementRow[];
+  const sales = (salesResponse.data ?? []) as unknown as SaleRow[];
+  const losses = (lossesResponse.data ?? []) as unknown as LossRow[];
+  const revenue = sales.reduce(
+    (total, sale) => total + Number(sale.total_amount),
+    0,
+  );
+  const unitsSold = sales.reduce(
+    (total, sale) =>
+      total +
+      sale.sale_items.reduce(
+        (lineTotal, line) => lineTotal + Number(line.quantity),
+        0,
+      ),
+    0,
+  );
+  const unitsLost = losses.reduce(
+    (total, loss) => total + Math.abs(Number(loss.quantity_delta)),
+    0,
+  );
+  const lossCost = losses.reduce(
+    (total, loss) =>
+      total +
+      Math.abs(Number(loss.quantity_delta)) *
+        Number(loss.item?.unit_cost ?? 0),
+    0,
+  );
+  const productSales = Array.from(
+    sales
+      .flatMap((sale) => sale.sale_items)
+      .reduce((products, line) => {
+        if (!line.item) return products;
+        const current = products.get(line.item.id) ?? {
+          name: getProductName(line.item.name, line.item.brand),
+          quantity: 0,
+          revenue: 0,
+        };
+        current.quantity += Number(line.quantity);
+        current.revenue += Number(line.line_total);
+        products.set(line.item.id, current);
+        return products;
+      }, new Map<string, { name: string; quantity: number; revenue: number }>())
+      .values(),
+  ).sort((first, second) => second.revenue - first.revenue);
 
   /*
    * Calcul des indicateurs.
@@ -332,10 +457,37 @@ export default async function DashboardPage() {
         }
       />
 
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-xs font-semibold uppercase tracking-[0.1em] text-foreground/45">
+          Période
+        </span>
+        {[7, 30, 90].map((days) => (
+          <Link
+            key={days}
+            href={`/?period=${days}`}
+            className={`inline-flex h-9 items-center rounded-xl border px-3 text-sm font-semibold transition ${
+              periodDays === days
+                ? "border-sidebar bg-sidebar text-white"
+                : "border-border bg-surface hover:border-brand/40"
+            }`}
+          >
+            {days} jours
+          </Link>
+        ))}
+      </div>
+
       <section
-        className="mt-8 grid gap-4 md:grid-cols-3"
+        className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
         aria-label="Indicateurs clés"
       >
+        <MetricCard
+          label={`Chiffre d’affaires · ${periodDays} j`}
+          value={formatCurrency(revenue, currency)}
+          detail={`${unitsSold} produit${unitsSold > 1 ? "s" : ""} vendu${unitsSold > 1 ? "s" : ""}`}
+          icon={<Banknote size={18} />}
+          tone="success"
+        />
+
         <MetricCard
           label="Valeur du stock"
           value={formatCurrency(stockValue, currency)}
@@ -359,6 +511,60 @@ export default async function DashboardPage() {
           icon={<ArrowUpRight size={18} />}
           tone="brand"
         />
+
+        <MetricCard
+          label={`Pertes · ${periodDays} j`}
+          value={String(unitsLost)}
+          detail={`${formatCurrency(lossCost, currency)} au coût d’achat`}
+          icon={<TriangleAlert size={18} />}
+          tone="danger"
+        />
+      </section>
+
+      <section className="mt-5 rounded-2xl border border-border bg-surface p-5 shadow-[0_12px_40px_rgb(57_45_30_/_5%)] sm:p-6">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">
+              Produits vendus
+            </h2>
+            <p className="mt-1 text-sm text-foreground/52">
+              Classement par chiffre d’affaires sur {periodDays} jours
+            </p>
+          </div>
+          <p className="mt-2 text-sm font-semibold text-brand-strong sm:mt-0">
+            {sales.length} vente{sales.length > 1 ? "s" : ""}
+          </p>
+        </div>
+
+        {productSales.length ? (
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {productSales.slice(0, 6).map((product, index) => (
+              <article
+                key={product.name}
+                className="flex min-w-0 items-center gap-3 rounded-xl bg-surface-muted/55 p-3"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sidebar text-xs font-semibold text-white">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">
+                    {product.name}
+                  </p>
+                  <p className="mt-1 text-xs text-foreground/48">
+                    {product.quantity} unité{product.quantity > 1 ? "s" : ""}
+                  </p>
+                </div>
+                <p className="ml-auto shrink-0 font-mono text-xs font-semibold">
+                  {formatCurrency(product.revenue, currency)}
+                </p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-5 rounded-xl bg-surface-muted/45 px-4 py-8 text-center text-sm text-foreground/50">
+            Aucune vente sur cette période.
+          </p>
+        )}
       </section>
 
       <section className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,0.85fr)]">
@@ -557,6 +763,11 @@ export default async function DashboardPage() {
                     {movement.author?.full_name || "Utilisateur"}
                   </span>
                 </p>
+                {movement.type === "perte" && movement.reason ? (
+                  <p className="mt-2 rounded-lg bg-danger/5 px-3 py-2 text-xs text-danger">
+                    Motif : {movement.reason}
+                  </p>
+                ) : null}
               </article>
             );
           })}
@@ -577,6 +788,10 @@ export default async function DashboardPage() {
 
                 <th className="px-4 py-3 font-semibold">
                   Quantité
+                </th>
+
+                <th className="px-4 py-3 font-semibold">
+                  Motif
                 </th>
 
                 <th className="px-4 py-3 font-semibold">
@@ -615,6 +830,10 @@ export default async function DashboardPage() {
                     >
                       {quantity > 0 ? "+" : ""}
                       {quantity}
+                    </td>
+
+                    <td className="max-w-48 px-4 py-4 text-foreground/55">
+                      {movement.reason ?? "—"}
                     </td>
 
                     <td className="px-4 py-4 text-foreground/60">
@@ -661,12 +880,13 @@ function MetricCard({
   value: string;
   detail: string;
   icon: React.ReactNode;
-  tone: "success" | "warning" | "brand";
+  tone: "success" | "warning" | "brand" | "danger";
 }) {
   const tones = {
     success: "bg-success/10 text-success",
     warning: "bg-warning/10 text-warning",
     brand: "bg-brand/10 text-brand-strong",
+    danger: "bg-danger/10 text-danger",
   };
 
   return (
@@ -693,6 +913,8 @@ function MetricCard({
             ? "text-success"
             : tone === "warning"
               ? "text-warning"
+              : tone === "danger"
+                ? "text-danger"
               : "text-foreground/50"
         }`}
       >

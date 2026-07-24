@@ -1,6 +1,10 @@
-import { Download, Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AppShell, PageHeading } from "@/components/app-shell";
+import {
+  MovementExportButton,
+  type ExportMovement,
+} from "@/components/movement-export-button";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type {
   MovementType,
@@ -188,24 +192,33 @@ export default async function MovementsPage() {
     >
       <PageHeading
         title={sellerMode ? "Mes mouvements" : "Mouvements"}
-        description={sellerMode ? "Retrouvez uniquement les ventes et comptages que vous avez enregistrés." : `Historique des variations du stock de ${storeName}.`}
+        description={sellerMode ? "Retrouvez uniquement les ventes, pertes et comptages que vous avez enregistrés." : `Historique des variations du stock de ${storeName}.`}
         action={
           sellerMode ? undefined : (
-          <button
-            type="button"
-            disabled
-            title="L’export CSV sera connecté dans une prochaine étape"
-            className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-semibold opacity-50 shadow-sm"
-          >
-            <Download size={17} />
-            Exporter en CSV
-          </button>
+            <MovementExportButton
+              storeName={storeName}
+              movements={movements.map(
+                (movement): ExportMovement => ({
+                  date: formatMovementDate(movement.created_at, timezone),
+                  product: getProductName(
+                    movement.item?.name ?? "Article supprimé",
+                    movement.item?.brand ?? "",
+                  ),
+                  type: labels[movement.type],
+                  quantity: Number(movement.quantity_delta),
+                  stockBefore: Number(movement.quantity_before),
+                  stockAfter: Number(movement.quantity_after),
+                  reason: movement.reason ?? "",
+                  author: movement.author?.full_name || "Utilisateur",
+                }),
+              )}
+            />
           )
         }
       />
 
-      <div className="mt-8 flex items-center gap-2 rounded-xl border border-border bg-surface p-3 text-sm text-foreground/55">
-        <Filter size={17} />
+      <div className="mt-6 flex items-start gap-2 rounded-xl border border-border bg-surface p-3 text-sm leading-5 text-foreground/55 sm:mt-8 sm:items-center">
+        <Filter className="mt-0.5 shrink-0 sm:mt-0" size={17} />
 
         <span>
           {movements.length} dernier
