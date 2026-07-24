@@ -1,6 +1,19 @@
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export async function getStockItems(storeId: string) {
+export type StockOverviewRow = {
+  item_id: string;
+  name: string;
+  brand: string;
+  kind: "commercialise" | "outil";
+  unit: string;
+  threshold: number | string;
+  unit_cost: number | string;
+  selling_price: number | string;
+  quantity: number | string;
+  stock_status: "ok" | "surveillance" | "rupture";
+};
+
+export async function getStockItems(storeId: string): Promise<StockOverviewRow[]> {
   const supabase = getSupabaseBrowserClient();
 
   if (!supabase) {
@@ -28,5 +41,5 @@ export async function getStockItems(storeId: string) {
     throw error;
   }
 
-  return data ?? [];
+  return (data ?? []) as StockOverviewRow[];
 }
