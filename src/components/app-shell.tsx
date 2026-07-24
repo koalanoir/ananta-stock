@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BarChart3, Boxes, ClipboardCheck, History, Settings, ShoppingCart } from "lucide-react";
 import type { UserRole } from "@/lib/types";
+import { SessionControls } from "@/components/session-controls";
 
 type AppShellProps = {
   active: "performance" | "sales" | "stocks" | "movements" | "settings";
@@ -57,13 +58,17 @@ export function AppShell({ active, role = "manager", storeName = "Ma boutique", 
           <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-white/48">BOUTIQUE</p>
           <p className="mt-2 truncate text-sm font-semibold" title={storeName}>{storeName}</p>
           <p className="mt-1 truncate text-xs text-white/55" title={userName}>{userName} · {isSeller ? "Vendeur" : "Gestionnaire"}</p>
+          <SessionControls role={role} />
         </div>
       </aside>
 
       <div className="min-w-0">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/80 bg-surface/92 px-4 backdrop-blur lg:hidden">
           <Link href="/" className="font-bold tracking-[0.12em]">ANANTA <span className="text-brand">STOCK</span></Link>
-          <span className="max-w-[48vw] truncate rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium">{storeName}</span>
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="max-w-[34vw] truncate rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium">{storeName}</span>
+            <SessionControls role={role} compact />
+          </div>
         </header>
         <main className="mx-auto w-full max-w-[1240px] px-4 py-6 pb-24 sm:px-7 lg:px-10 lg:py-10 lg:pb-10">{children}</main>
 
