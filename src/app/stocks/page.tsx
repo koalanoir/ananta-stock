@@ -7,7 +7,7 @@ import { AppShell, PageHeading } from "@/components/app-shell";
 import { demoItems } from "@/lib/demo-data";
 import { getStockStatus, type MovementType, type StockItem } from "@/lib/types";
 import { getCurrentMembership } from "@/lib/data/current-user";
-import { getStockItems } from "@/lib/data/stocks";
+import { getStockItems, type StockOverviewRow } from "@/lib/data/stocks";
 
 type Filter = "all" | "watch" | "rupture";
 
@@ -22,11 +22,21 @@ function StocksContent() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [storeName, setStoreName] = useState("Ma boutique");
+  const [userName, setUserName] = useState("Gestionnaire");
 
   useEffect(() => {
     async function loadStocks() {
       try {
         const membership = await getCurrentMembership();
+
+        const store = membership.stores as { name?: string } | null;
+        setStoreName(store?.name?.trim() || "Ma boutique");
+        setUserName(
+          String(membership.user.user_metadata?.full_name ?? "").trim() ||
+            membership.user.email ||
+            "Gestionnaire",
+        );
 
         if (!membership.store_id) {
           throw new Error("Aucun magasin sélectionné.");
@@ -35,7 +45,7 @@ function StocksContent() {
         const rows = await getStockItems(membership.store_id);
 
         setItems(
-          rows.map((row: { item_id: any; name: any; brand: any; kind: any; unit: any; quantity: any; threshold: any; unit_cost: any; }) => ({
+          rows.map((row: StockOverviewRow) => ({
             id: row.item_id,
             name: row.name,
             brand: row.brand,
@@ -93,7 +103,9 @@ function StocksContent() {
   }
 
   return (
-    <AppShell active="stocks">
+    <AppShell active="stocks" storeName={storeName} userName={userName}>
+      {isLoading ? <p className="mb-4 text-sm text-foreground/50">Chargement des stocks…</p> : null}
+      {loadError ? <p role="alert" className="mb-4 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">{loadError}</p> : null}
       <PageHeading
         title="Stocks"
         description="Trouvez un article et mettez sa quantité à jour. Chaque opération deviendra un mouvement traçable une fois Supabase connecté."
