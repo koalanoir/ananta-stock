@@ -5,6 +5,8 @@ import {
   type SellerSummary,
 } from "./settings-client";
 
+export const dynamic = "force-dynamic";
+
 type Membership = {
   organization_id: string;
   store_id: string | null;
@@ -394,6 +396,7 @@ export default async function SettingsPage() {
       }
       storeId={storeId}
       storeName={storeData.name}
+      userName={String(user.user_metadata?.full_name ?? "").trim() || user.email || "Gestionnaire"}
       role={administratorRole}
       initialSellers={sellers}
     />
