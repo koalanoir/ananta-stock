@@ -9,6 +9,7 @@ import {
   Search,
   ShoppingCart,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -36,6 +37,9 @@ export function SalesClient({ initialItems, storeName, userName }: SalesClientPr
   const [confirmation, setConfirmation] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [pendingItemId, setPendingItemId] = useState<string | null>(null);
+  const [lossItem, setLossItem] = useState<SaleItem | null>(null);
+  const [lossQuantity, setLossQuantity] = useState(1);
+  const [lossReason, setLossReason] = useState("Produit abîmé");
 
   const categories = useMemo(
     () => [
@@ -170,6 +174,59 @@ export function SalesClient({ initialItems, storeName, userName }: SalesClientPr
     );
   }
 
+  async function handleRecordLoss() {
+    if (!lossItem || pendingItemId) return;
+
+    const quantity = Math.min(
+      lossItem.quantity,
+      Math.max(1, lossQuantity),
+    );
+
+    if (!lossReason.trim() || quantity < 1) {
+      setErrorMessage("Indiquez la quantité et le motif de la perte.");
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setErrorMessage("La connexion à Supabase n’est pas configurée.");
+      return;
+    }
+
+    setPendingItemId(lossItem.id);
+    setErrorMessage("");
+
+    const { error } = await supabase.rpc("record_stock_loss", {
+      target_item_id: lossItem.id,
+      quantity_lost: quantity,
+      loss_reason: lossReason.trim(),
+      request_id: crypto.randomUUID(),
+    });
+
+    setPendingItemId(null);
+
+    if (error) {
+      setErrorMessage(
+        `La perte n’a pas été enregistrée : ${error.message}`,
+      );
+      return;
+    }
+
+    setItems((current) =>
+      current.map((item) =>
+        item.id === lossItem.id
+          ? { ...item, quantity: Math.max(0, item.quantity - quantity) }
+          : item,
+      ),
+    );
+    setConfirmation(
+      `perte de ${quantity} ${lossItem.unit} · ${lossItem.name}`,
+    );
+    setLossItem(null);
+    setLossQuantity(1);
+    setLossReason("Produit abîmé");
+  }
+
   return (
     <AppShell active="sales" role="seller" storeName={storeName} userName={userName}>
       <PageHeading
@@ -188,7 +245,7 @@ export function SalesClient({ initialItems, storeName, userName }: SalesClientPr
             size={21}
             aria-hidden="true"
           />
-          <span>Vente enregistrée : {confirmation}</span>
+          <span>Opération enregistrée : {confirmation}</span>
         </div>
       ) : null}
 
@@ -203,6 +260,94 @@ export function SalesClient({ initialItems, storeName, userName }: SalesClientPr
             aria-hidden="true"
           />
           <span>{errorMessage}</span>
+        </div>
+      ) : null}
+
+      {lossItem ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-end bg-sidebar/45 p-0 backdrop-blur-sm sm:place-items-center sm:p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setLossItem(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="loss-title"
+            className="w-full rounded-t-3xl border border-border bg-surface p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-danger">
+                  Stock non vendu
+                </p>
+                <h2 id="loss-title" className="mt-2 text-xl font-semibold">
+                  Signaler une perte
+                </h2>
+                <p className="mt-1 text-sm text-foreground/55">
+                  {lossItem.name} · {lossItem.brand}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Fermer"
+                onClick={() => setLossItem(null)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl hover:bg-surface-muted"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <label className="mt-6 block text-sm font-semibold">
+              Quantité perdue
+              <input
+                type="number"
+                min="1"
+                max={lossItem.quantity}
+                value={lossQuantity}
+                onChange={(event) =>
+                  setLossQuantity(
+                    Math.min(
+                      lossItem.quantity,
+                      Math.max(1, Number(event.target.value) || 1),
+                    ),
+                  )
+                }
+                className="mt-2 h-12 w-full rounded-xl border border-border bg-background px-4 font-mono outline-none focus:border-brand"
+              />
+            </label>
+
+            <label className="mt-4 block text-sm font-semibold">
+              Motif
+              <select
+                value={lossReason}
+                onChange={(event) => setLossReason(event.target.value)}
+                className="mt-2 h-12 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none focus:border-brand"
+              >
+                <option>Produit abîmé</option>
+                <option>Produit périmé</option>
+                <option>Casse</option>
+                <option>Vol ou disparition</option>
+                <option>Erreur de manipulation</option>
+                <option>Autre perte justifiée</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              onClick={handleRecordLoss}
+              disabled={Boolean(pendingItemId)}
+              className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-danger px-4 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {pendingItemId ? (
+                <LoaderCircle className="animate-spin" size={18} />
+              ) : (
+                <TriangleAlert size={18} />
+              )}
+              Confirmer la perte
+            </button>
+          </section>
         </div>
       ) : null}
 
@@ -280,7 +425,7 @@ export function SalesClient({ initialItems, storeName, userName }: SalesClientPr
                 </span>
               </div>
 
-              <div className="mt-5 grid grid-cols-[1fr_1.3fr] gap-3">
+              <div className="mt-5 grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] gap-3">
                 <div className="flex h-12 items-center rounded-xl border border-border bg-background">
                   <button
                     type="button"
@@ -352,6 +497,19 @@ export function SalesClient({ initialItems, storeName, userName }: SalesClientPr
                   )}
                 </button>
               </div>
+
+              <button
+                type="button"
+                disabled={isOutOfStock || Boolean(pendingItemId)}
+                onClick={() => {
+                  setLossItem(item);
+                  setLossQuantity(1);
+                }}
+                className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-danger/25 px-3 text-xs font-semibold text-danger transition hover:bg-danger/5 disabled:opacity-40"
+              >
+                <TriangleAlert size={15} aria-hidden="true" />
+                Signaler une perte
+              </button>
             </article>
           );
         })}
