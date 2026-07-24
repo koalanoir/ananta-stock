@@ -4,10 +4,11 @@ import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PackagePlus, Search, SlidersHorizontal, X } from "lucide-react";
 import { AppShell, PageHeading } from "@/components/app-shell";
-import { demoItems } from "@/lib/demo-data";
 import { getStockStatus, type MovementType, type StockItem } from "@/lib/types";
 import { getCurrentMembership } from "@/lib/data/current-user";
 import { getStockItems, type StockOverviewRow } from "@/lib/data/stocks";
+import { createStockItem, type CreateStockItemInput } from "@/lib/data/catalog";
+import { recordStockMovement } from "@/lib/data/movements";
 
 type Filter = "all" | "watch" | "rupture";
 
@@ -24,6 +25,11 @@ function StocksContent() {
   const [loadError, setLoadError] = useState("");
   const [storeName, setStoreName] = useState("Ma boutique");
   const [userName, setUserName] = useState("Gestionnaire");
+  const [storeId, setStoreId] = useState("");
+  const [mutationError, setMutationError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const selectedItemId = searchParams.get("item");
+  const [editingItem, setEditingItem] = useState<StockItem | null>(null);
 
   useEffect(() => {
     async function loadStocks() {
@@ -42,21 +48,25 @@ function StocksContent() {
           throw new Error("Aucun magasin sélectionné.");
         }
 
+        setStoreId(membership.store_id);
         const rows = await getStockItems(membership.store_id);
 
-        setItems(
-          rows.map((row: StockOverviewRow) => ({
+        const loadedItems = rows.map((row: StockOverviewRow) => ({
             id: row.item_id,
             name: row.name,
             brand: row.brand,
-            category: "",
+            category: row.category_name,
             kind: row.kind,
             unit: row.unit,
             quantity: Number(row.quantity),
             threshold: Number(row.threshold),
             unitCost: Number(row.unit_cost),
-          })),
-        );
+          }));
+
+        setItems(loadedItems);
+
+        const selected = loadedItems.find((item) => item.id === selectedItemId);
+        if (selected) setEditingItem(selected);
       } catch (error) {
         setLoadError(
           error instanceof Error
@@ -69,12 +79,10 @@ function StocksContent() {
     }
 
     void loadStocks();
-  }, []);
+  }, [selectedItemId]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(searchParams.get("filter") === "watch" ? "watch" : "all");
   const [category, setCategory] = useState("Toutes");
-  const selectedItemId = searchParams.get("item");
-  const [editingItem, setEditingItem] = useState<StockItem | null>(() => demoItems.find((item) => item.id === selectedItemId) ?? null);
   const [isAdding, setIsAdding] = useState(searchParams.get("new") === "1");
 
   const categories = useMemo(() => ["Toutes", ...Array.from(new Set(items.map((item) => item.category)))], [items]);
@@ -87,25 +95,53 @@ function StocksContent() {
     return matchesQuery && matchesCategory && matchesFilter;
   }), [category, filter, items, query]);
 
-  function applyMovement(itemId: string, type: MovementType, quantity: number) {
-    setItems((current) => current.map((item) => {
-      if (item.id !== itemId) return item;
-      if (type === "ajustement") return { ...item, quantity };
-      const direction = type === "entree" ? 1 : -1;
-      return { ...item, quantity: item.quantity + direction * quantity };
-    }));
-    setEditingItem(null);
+  async function applyMovement(itemId: string, type: MovementType, quantity: number, reason: string) {
+    setIsSaving(true);
+    setMutationError("");
+
+    try {
+      await recordStockMovement(
+        itemId,
+        type as Exclude<MovementType, "vente">,
+        quantity,
+        reason,
+      );
+
+      const rows = await getStockItems(storeId);
+      setItems(rows.map(toStockItem));
+      setEditingItem(null);
+    } catch (error) {
+      setMutationError(
+        error instanceof Error ? error.message : "Le mouvement n’a pas pu être enregistré.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function addItem(item: StockItem) {
-    setItems((current) => [item, ...current]);
-    setIsAdding(false);
+  async function addItem(item: CreateStockItemInput) {
+    setIsSaving(true);
+    setMutationError("");
+
+    try {
+      await createStockItem(storeId, item);
+      const rows = await getStockItems(storeId);
+      setItems(rows.map(toStockItem));
+      setIsAdding(false);
+    } catch (error) {
+      setMutationError(
+        error instanceof Error ? error.message : "L’article n’a pas pu être ajouté.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
     <AppShell active="stocks" storeName={storeName} userName={userName}>
       {isLoading ? <p className="mb-4 text-sm text-foreground/50">Chargement des stocks…</p> : null}
       {loadError ? <p role="alert" className="mb-4 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">{loadError}</p> : null}
+      {mutationError ? <p role="alert" className="mb-4 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">{mutationError}</p> : null}
       <PageHeading
         title="Stocks"
         description="Trouvez un article et mettez sa quantité à jour. Chaque opération deviendra un mouvement traçable une fois Supabase connecté."
@@ -179,8 +215,8 @@ function StocksContent() {
         </div>
       </section>
 
-      {editingItem ? <MovementDialog item={items.find((item) => item.id === editingItem.id) ?? editingItem} onClose={() => setEditingItem(null)} onSubmit={applyMovement} /> : null}
-      {isAdding ? <AddItemDialog onClose={() => setIsAdding(false)} onSubmit={addItem} /> : null}
+      {editingItem ? <MovementDialog item={items.find((item) => item.id === editingItem.id) ?? editingItem} pending={isSaving} onClose={() => setEditingItem(null)} onSubmit={applyMovement} /> : null}
+      {isAdding ? <AddItemDialog pending={isSaving} onClose={() => setIsAdding(false)} onSubmit={addItem} /> : null}
     </AppShell>
   );
 }
@@ -191,23 +227,38 @@ function FilterButton({ active, onClick, children }: { active: boolean; onClick:
 
 function Count({ children }: { children: React.ReactNode }) { return <span className="font-mono text-xs opacity-55">{children}</span>; }
 
-function MovementDialog({ item, onClose, onSubmit }: { item: StockItem; onClose: () => void; onSubmit: (id: string, type: MovementType, quantity: number) => void }) {
+function MovementDialog({ item, pending, onClose, onSubmit }: { item: StockItem; pending: boolean; onClose: () => void; onSubmit: (id: string, type: MovementType, quantity: number, reason: string) => Promise<void> }) {
   const [type, setType] = useState<MovementType>("entree");
   const [quantity, setQuantity] = useState(1);
-  function submit(event: FormEvent) { event.preventDefault(); onSubmit(item.id, type, quantity); }
+  const [reason, setReason] = useState("");
+  function submit(event: FormEvent) { event.preventDefault(); void onSubmit(item.id, type, quantity, reason); }
   function selectType(value: MovementType) {
     setType(value);
     setQuantity(value === "ajustement" ? item.quantity : 1);
   }
   const isAdjustment = type === "ajustement";
   const maximum = type === "sortie" || type === "perte" ? item.quantity : undefined;
-  return <Dialog title="Mettre le stock à jour" onClose={onClose}><form onSubmit={submit}><p className="text-sm font-semibold">{item.name}</p><p className="mt-1 text-sm text-foreground/48">Stock actuel : <strong className="font-mono text-foreground">{item.quantity}</strong> {item.unit}{item.quantity > 1 ? "s" : ""}</p><div className="mt-5 grid grid-cols-2 gap-2">{(["entree", "sortie", "perte", "ajustement"] as MovementType[]).map((value) => <button type="button" key={value} onClick={() => selectType(value)} className={`h-11 rounded-lg border text-sm font-semibold capitalize ${type === value ? "border-brand bg-brand/10 text-brand-strong" : "border-border"}`}>{value}</button>)}</div><label className="mt-5 block text-sm font-semibold">{isAdjustment ? "Nouvelle quantité en stock" : "Quantité"}<input required min={isAdjustment ? 0 : 1} max={maximum} type="number" value={quantity} onChange={(event) => setQuantity(Math.max(isAdjustment ? 0 : 1, Number(event.target.value)))} className="mt-2 h-12 w-full rounded-xl border border-border bg-background px-4 font-mono outline-none focus:border-brand" /></label><button type="submit" className="mt-6 h-12 w-full rounded-xl bg-brand font-semibold text-white hover:bg-brand-strong">Valider le mouvement</button></form></Dialog>;
+  return <Dialog title="Mettre le stock à jour" onClose={onClose}><form onSubmit={submit}><p className="text-sm font-semibold">{item.name}</p><p className="mt-1 text-sm text-foreground/48">Stock actuel : <strong className="font-mono text-foreground">{item.quantity}</strong> {item.unit}{item.quantity > 1 ? "s" : ""}</p><div className="mt-5 grid grid-cols-2 gap-2">{(["entree", "sortie", "perte", "ajustement"] as MovementType[]).map((value) => <button type="button" key={value} onClick={() => selectType(value)} className={`h-11 rounded-lg border text-sm font-semibold capitalize ${type === value ? "border-brand bg-brand/10 text-brand-strong" : "border-border"}`}>{value}</button>)}</div><label className="mt-5 block text-sm font-semibold">{isAdjustment ? "Nouvelle quantité en stock" : "Quantité"}<input required min={isAdjustment ? 0 : 1} max={maximum} type="number" value={quantity} onChange={(event) => setQuantity(Math.max(isAdjustment ? 0 : 1, Number(event.target.value)))} className="mt-2 h-12 w-full rounded-xl border border-border bg-background px-4 font-mono outline-none focus:border-brand" /></label><label className="mt-4 block text-sm font-semibold">Motif<textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={2} className="mt-2 w-full resize-none rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-brand" placeholder="Réception, casse, inventaire…" /></label><button disabled={pending} type="submit" className="mt-6 h-12 w-full rounded-xl bg-brand font-semibold text-white hover:bg-brand-strong disabled:opacity-50">{pending ? "Enregistrement…" : "Valider le mouvement"}</button></form></Dialog>;
 }
 
-function AddItemDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit: (item: StockItem) => void }) {
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const data = new FormData(event.currentTarget); const brand = String(data.get("brand")).trim(); const product = String(data.get("product")).trim(); onSubmit({ id: crypto.randomUUID(), name: `${product} ${brand}`.trim(), brand, category: String(data.get("category")), kind: data.get("kind") as StockItem["kind"], unit: String(data.get("unit")), quantity: Number(data.get("quantity")), threshold: Number(data.get("threshold")), unitCost: Number(data.get("unitCost")) }); }
+function AddItemDialog({ pending, onClose, onSubmit }: { pending: boolean; onClose: () => void; onSubmit: (item: CreateStockItemInput) => Promise<void> }) {
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const data = new FormData(event.currentTarget); const brand = String(data.get("brand")).trim(); const product = String(data.get("product")).trim(); void onSubmit({ name: product, brand, category: String(data.get("category")).trim(), kind: data.get("kind") as StockItem["kind"], unit: String(data.get("unit")).trim(), quantity: Number(data.get("quantity")), threshold: Number(data.get("threshold")), unitCost: Number(data.get("unitCost")), sellingPrice: Number(data.get("sellingPrice")) }); }
   const fieldClass = "mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-brand";
-  return <Dialog title="Ajouter un article" onClose={onClose}><form onSubmit={submit} className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">Produit et format<input name="product" required autoFocus className={fieldClass} placeholder="Ex. Farine de blé 1 kg" /></label><label className="text-sm font-semibold">Marque<input name="brand" required className={fieldClass} placeholder="Ex. Francine" /></label><p className="-mt-2 text-xs text-foreground/50 sm:col-span-2">Le nom affiché combinera le produit, son format et sa marque pour éviter les confusions.</p><label className="text-sm font-semibold">Catégorie<input name="category" required className={fieldClass} placeholder="Épicerie" /></label><label className="text-sm font-semibold">Type<select name="kind" className={fieldClass}><option value="commercialise">Commercialisé</option><option value="outil">Outil / consommable</option></select></label><label className="text-sm font-semibold">Unité<input name="unit" required className={fieldClass} placeholder="sac, bouteille…" /></label><label className="text-sm font-semibold">Quantité initiale<input name="quantity" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><label className="text-sm font-semibold">Seuil d’alerte<input name="threshold" type="number" min="0" defaultValue="5" required className={fieldClass} /></label><label className="text-sm font-semibold">Coût unitaire (FCFA)<input name="unitCost" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><button className="mt-2 h-12 rounded-xl bg-brand font-semibold text-white hover:bg-brand-strong sm:col-span-2">Ajouter l’article</button></form></Dialog>;
+  return <Dialog title="Ajouter un article" onClose={onClose}><form onSubmit={submit} className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">Produit et format<input name="product" required autoFocus className={fieldClass} placeholder="Ex. Farine de blé 1 kg" /></label><label className="text-sm font-semibold">Marque<input name="brand" required className={fieldClass} placeholder="Ex. Francine" /></label><p className="-mt-2 text-xs text-foreground/50 sm:col-span-2">Le produit et la marque sont enregistrés séparément pour éviter les doublons.</p><label className="text-sm font-semibold">Catégorie<input name="category" required className={fieldClass} placeholder="Épicerie" /></label><label className="text-sm font-semibold">Type<select name="kind" className={fieldClass}><option value="commercialise">Commercialisé</option><option value="outil">Outil / consommable</option></select></label><label className="text-sm font-semibold">Unité<input name="unit" required className={fieldClass} placeholder="sac, bouteille…" /></label><label className="text-sm font-semibold">Quantité initiale<input name="quantity" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><label className="text-sm font-semibold">Seuil d’alerte<input name="threshold" type="number" min="0" defaultValue="5" required className={fieldClass} /></label><label className="text-sm font-semibold">Coût unitaire (FCFA)<input name="unitCost" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><label className="text-sm font-semibold">Prix de vente (FCFA)<input name="sellingPrice" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><button disabled={pending} className="mt-2 h-12 rounded-xl bg-brand font-semibold text-white hover:bg-brand-strong disabled:opacity-50 sm:col-span-2">{pending ? "Ajout…" : "Ajouter l’article"}</button></form></Dialog>;
+}
+
+function toStockItem(row: StockOverviewRow): StockItem {
+  return {
+    id: row.item_id,
+    name: row.name,
+    brand: row.brand,
+    category: row.category_name,
+    kind: row.kind,
+    unit: row.unit,
+    quantity: Number(row.quantity),
+    threshold: Number(row.threshold),
+    unitCost: Number(row.unit_cost),
+  };
 }
 
 function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {

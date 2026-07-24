@@ -18,6 +18,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Membership = {
   role: "owner" | "manager" | "seller";
+  store_id: string | null;
 };
 
 type LoginMode = "manager" | "seller";
@@ -85,7 +86,7 @@ export default function LoginPage() {
       error: membershipError,
     } = await supabase
       .from("memberships")
-      .select("role")
+      .select("role, store_id")
       .eq("user_id", data.user.id)
       .eq("active", true)
       .limit(1)
@@ -148,7 +149,7 @@ export default function LoginPage() {
         const membershipResult =
           await supabase
             .from("memberships")
-            .select("role")
+            .select("role, store_id")
             .eq(
               "user_id",
               data.user.id,
@@ -184,6 +185,25 @@ export default function LoginPage() {
 
     const membership =
       membershipData as Membership;
+
+    if (membership.role === "seller" && membership.store_id) {
+      const { error: sessionError } = await supabase.rpc(
+        "start_work_session",
+        {
+          target_store_id: membership.store_id,
+          session_note: "Ouverture automatique à la connexion",
+        },
+      );
+
+      if (sessionError) {
+        await supabase.auth.signOut();
+        setPending(false);
+        setErrorMessage(
+          `La session de travail n’a pas pu démarrer : ${sessionError.message}`,
+        );
+        return;
+      }
+    }
 
     const requestedDestination =
       new URLSearchParams(

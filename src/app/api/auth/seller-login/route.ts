@@ -114,9 +114,25 @@ export async function POST(request: Request) {
     return invalidCredentials();
   }
 
+  const { data: workSession, error: workSessionError } =
+    await supabase.rpc("start_work_session", {
+      target_store_id: store.id,
+      session_note: "Ouverture automatique à la connexion",
+    });
+
+  if (workSessionError) {
+    await supabase.auth.signOut();
+
+    return NextResponse.json(
+      { error: `La session de travail n’a pas pu démarrer : ${workSessionError.message}` },
+      { status: 500 },
+    );
+  }
+
   return NextResponse.json({
     success: true,
     destination: "/sales",
+    workSession,
   });
 }
 
