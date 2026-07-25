@@ -1,10 +1,26 @@
 import Link from "next/link";
-import { BarChart3, Boxes, ClipboardCheck, History, Settings, ShoppingCart } from "lucide-react";
+import {
+  BarChart3,
+  Boxes,
+  ClipboardCheck,
+  History,
+  ReceiptText,
+  Settings,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 import type { UserRole } from "@/lib/types";
 import { SessionControls } from "@/components/session-controls";
 
 type AppShellProps = {
-  active: "performance" | "sales" | "stocks" | "movements" | "settings";
+  active:
+    | "performance"
+    | "sales"
+    | "stocks"
+    | "movements"
+    | "invoices"
+    | "customers"
+    | "settings";
   role?: UserRole;
   storeName?: string;
   userName?: string;
@@ -12,16 +28,19 @@ type AppShellProps = {
 };
 
 const managerNavigation = [
-  { key: "performance", label: "Performance", href: "/", icon: BarChart3 },
+  { key: "performance", label: "Performance", mobileLabel: "Stats", href: "/", icon: BarChart3 },
   { key: "stocks", label: "Stocks", href: "/stocks", icon: Boxes },
-  { key: "movements", label: "Mouvements", href: "/movements", icon: History },
-  { key: "settings", label: "Paramètres", href: "/settings", icon: Settings },
+  { key: "movements", label: "Mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
+  { key: "invoices", label: "Factures", href: "/invoices", icon: ReceiptText },
+  { key: "customers", label: "Clients", href: "/customers", icon: Users },
+  { key: "settings", label: "Paramètres", mobileLabel: "Params", href: "/settings", icon: Settings },
 ] as const;
 
 const sellerNavigation = [
   { key: "sales", label: "Ventes", href: "/sales", icon: ShoppingCart },
-  { key: "stocks", label: "Comptage rapide", href: "/count", icon: ClipboardCheck },
-  { key: "movements", label: "Mes mouvements", href: "/movements", icon: History },
+  { key: "invoices", label: "Factures", href: "/invoices", icon: ReceiptText },
+  { key: "stocks", label: "Comptage rapide", mobileLabel: "Comptage", href: "/count", icon: ClipboardCheck },
+  { key: "movements", label: "Mes mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
 ] as const;
 
 export function AppShell({ active, role = "manager", storeName = "Ma boutique", userName = "Utilisateur", children }: AppShellProps) {
@@ -72,14 +91,16 @@ export function AppShell({ active, role = "manager", storeName = "Ma boutique", 
         </header>
         <main className="mx-auto w-full max-w-[1240px] px-4 py-6 pb-24 sm:px-7 lg:px-10 lg:py-10 lg:pb-10">{children}</main>
 
-        <nav className={`fixed inset-x-0 bottom-0 z-40 grid min-h-16 w-screen max-w-full ${isSeller ? "grid-cols-3" : "grid-cols-4"} border-t border-border bg-surface/96 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgb(35_55_46_/_8%)] backdrop-blur lg:hidden`} aria-label="Navigation mobile">
+        <nav className={`fixed inset-x-0 bottom-0 z-40 grid min-h-16 w-screen max-w-full ${isSeller ? "grid-cols-4" : "grid-cols-6"} border-t border-border bg-surface/96 px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgb(35_55_46_/_8%)] backdrop-blur lg:hidden`} aria-label="Navigation mobile">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.key;
             return (
-              <Link key={item.key} href={item.href} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg text-[0.66rem] font-medium ${isActive ? "text-brand-strong" : "text-foreground/55"}`}>
+              <Link key={item.key} href={item.href} title={item.label} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-[0.58rem] font-medium sm:text-[0.66rem] ${isActive ? "text-brand-strong" : "text-foreground/55"}`}>
                 <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} aria-hidden="true" />
-                {item.label}
+                <span className="max-w-full truncate">
+                  {"mobileLabel" in item ? item.mobileLabel : item.label}
+                </span>
               </Link>
             );
           })}
