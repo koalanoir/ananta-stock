@@ -166,10 +166,8 @@ function formatMoney(value: number, currency: string) {
     maximumFractionDigits: 0,
   }).format(value);
 }
-
 function formatQuantity(value: number) {
   return new Intl.NumberFormat("fr-FR", {
     maximumFractionDigits: 3,
   }).format(value);
 }
-
