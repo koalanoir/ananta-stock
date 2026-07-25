@@ -142,4 +142,3 @@ function normalizeInvoice(row: unknown): InvoiceDocument {
     })),
   };
 }
-
