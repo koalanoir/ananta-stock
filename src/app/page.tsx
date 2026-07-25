@@ -5,11 +5,18 @@ import {
   ArrowUpRight,
   Banknote,
   CircleAlert,
+  Coins,
   PackagePlus,
+  Percent,
   TrendingUp,
   TriangleAlert,
 } from "lucide-react";
 import { AppShell, PageHeading } from "@/components/app-shell";
+import {
+  calculateProfitability,
+  type ProfitabilityLoss,
+  type ProfitabilitySale,
+} from "@/lib/profitability";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import {
   formatCurrency,
@@ -60,19 +67,9 @@ type MovementRow = {
   } | null;
 };
 
-type SaleRow = {
+type ItemMetadataRow = {
   id: string;
-  total_amount: number | string;
-  sale_items: Array<{
-    quantity: number | string;
-    line_total: number | string;
-    item: { id: string; name: string; brand: string } | null;
-  }>;
-};
-
-type LossRow = {
-  quantity_delta: number | string;
-  item: { unit_cost: number | string } | null;
+  created_at: string;
 };
 
 type MembershipRow = {
@@ -221,12 +218,20 @@ export default async function DashboardPage({
     // eslint-disable-next-line react-hooks/purity
     Date.now() - periodDays * 24 * 60 * 60 * 1000,
   ).toISOString();
+  const dormantSince = new Date(
+    // Dormancy is intentionally fixed at 30 days, independently of the filter.
+    // eslint-disable-next-line react-hooks/purity
+    Date.now() - 30 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const salesHistorySince =
+    performanceSince < dormantSince ? performanceSince : dormantSince;
 
   const [
     stockResponse,
     movementResponse,
     salesResponse,
     lossesResponse,
+    itemMetadataResponse,
   ] = await Promise.all([
     supabase
       .from("stock_overview")
@@ -273,32 +278,49 @@ export default async function DashboardPage({
       .from("sales")
       .select(`
         id,
+        created_at,
         total_amount,
         sale_items (
           quantity,
           line_total,
+          line_cost,
+          gross_margin,
           item:items (
             id,
             name,
-            brand
+            brand,
+            category:categories (
+              id,
+              name
+            )
           )
         )
       `)
       .eq("store_id", storeId)
       .eq("status", "completed")
-      .gte("created_at", performanceSince),
+      .gte("created_at", salesHistorySince),
 
     supabase
       .from("inventory_movements")
       .select(`
         quantity_delta,
+        created_at,
         item:items!inventory_movements_item_id_fkey (
+          id,
+          name,
+          brand,
           unit_cost
         )
       `)
       .eq("store_id", storeId)
       .eq("type", "perte")
-      .gte("created_at", performanceSince),
+      .gte("created_at", salesHistorySince),
+
+    supabase
+      .from("items")
+      .select("id, created_at")
+      .eq("store_id", storeId)
+      .eq("active", true),
   ]);
 
   if (stockResponse.error) {
@@ -325,54 +347,25 @@ export default async function DashboardPage({
     );
   }
 
+  if (itemMetadataResponse.error) {
+    throw new Error(
+      `Impossible de charger l’ancienneté des articles : ${itemMetadataResponse.error.message}`,
+    );
+  }
+
   const stockItems = (stockResponse.data ?? []) as StockRow[];
 
   const movements = (
     movementResponse.data ?? []
   ) as unknown as MovementRow[];
-  const sales = (salesResponse.data ?? []) as unknown as SaleRow[];
-  const losses = (lossesResponse.data ?? []) as unknown as LossRow[];
-  const revenue = sales.reduce(
-    (total, sale) => total + Number(sale.total_amount),
-    0,
+  const sales = (salesResponse.data ?? []) as unknown as ProfitabilitySale[];
+  const losses = (lossesResponse.data ?? []) as unknown as ProfitabilityLoss[];
+  const itemMetadata = (itemMetadataResponse.data ?? []) as ItemMetadataRow[];
+  const profitability = calculateProfitability(
+    sales,
+    losses,
+    performanceSince,
   );
-  const unitsSold = sales.reduce(
-    (total, sale) =>
-      total +
-      sale.sale_items.reduce(
-        (lineTotal, line) => lineTotal + Number(line.quantity),
-        0,
-      ),
-    0,
-  );
-  const unitsLost = losses.reduce(
-    (total, loss) => total + Math.abs(Number(loss.quantity_delta)),
-    0,
-  );
-  const lossCost = losses.reduce(
-    (total, loss) =>
-      total +
-      Math.abs(Number(loss.quantity_delta)) *
-        Number(loss.item?.unit_cost ?? 0),
-    0,
-  );
-  const productSales = Array.from(
-    sales
-      .flatMap((sale) => sale.sale_items)
-      .reduce((products, line) => {
-        if (!line.item) return products;
-        const current = products.get(line.item.id) ?? {
-          name: getProductName(line.item.name, line.item.brand),
-          quantity: 0,
-          revenue: 0,
-        };
-        current.quantity += Number(line.quantity);
-        current.revenue += Number(line.line_total);
-        products.set(line.item.id, current);
-        return products;
-      }, new Map<string, { name: string; quantity: number; revenue: number }>())
-      .values(),
-  ).sort((first, second) => second.revenue - first.revenue);
 
   /*
    * Calcul des indicateurs.
@@ -389,6 +382,93 @@ export default async function DashboardPage({
   const outOfStock = watchedItems.filter(
     (item) => item.stock_status === "rupture",
   );
+  const lowStock = watchedItems.filter(
+    (item) => item.stock_status === "surveillance",
+  );
+  const lastSaleByItem = new Map<string, string>();
+
+  for (const sale of sales) {
+    for (const line of sale.sale_items) {
+      if (!line.item) continue;
+      const previous = lastSaleByItem.get(line.item.id);
+      if (!previous || sale.created_at > previous) {
+        lastSaleByItem.set(line.item.id, sale.created_at);
+      }
+    }
+  }
+
+  const createdAtByItem = new Map(
+    itemMetadata.map((item) => [item.id, item.created_at]),
+  );
+  const dormantItems = stockItems.filter((item) => {
+    if (Number(item.quantity) <= 0) return false;
+    const createdAt = createdAtByItem.get(item.item_id);
+    const lastSale = lastSaleByItem.get(item.item_id);
+    return (
+      Boolean(createdAt && createdAt < dormantSince) &&
+      (!lastSale || lastSale < dormantSince)
+    );
+  });
+  const abnormalLossThreshold = profitability.revenue * 0.05;
+  const abnormalLosses = Array.from(
+    profitability.losses
+      .reduce((grouped, loss) => {
+        if (!loss.item) return grouped;
+        const current = grouped.get(loss.item.id) ?? {
+          itemId: loss.item.id,
+          name: getProductName(loss.item.name, loss.item.brand),
+          units: 0,
+          cost: 0,
+        };
+        const quantity = Math.abs(Number(loss.quantity_delta));
+        current.units += quantity;
+        current.cost += quantity * Number(loss.item.unit_cost);
+        grouped.set(loss.item.id, current);
+        return grouped;
+      }, new Map<string, { itemId: string; name: string; units: number; cost: number }>())
+      .values(),
+  )
+    .filter(
+      (loss) =>
+        loss.units >= 3 ||
+        (profitability.revenue > 0 &&
+          loss.cost >= abnormalLossThreshold),
+    )
+    .sort((first, second) => second.cost - first.cost);
+  const smartAlerts = [
+    ...outOfStock.map((item) => ({
+      id: `rupture-${item.item_id}`,
+      name: getProductName(item.name, item.brand),
+      label: "Rupture",
+      detail: "Aucune unité disponible",
+      tone: "danger" as const,
+      href: `/stocks?item=${item.item_id}`,
+    })),
+    ...lowStock.map((item) => ({
+      id: `faible-${item.item_id}`,
+      name: getProductName(item.name, item.brand),
+      label: "Stock faible",
+      detail: `${Number(item.quantity)} ${item.unit} · seuil ${Number(item.threshold)}`,
+      tone: "warning" as const,
+      href: `/stocks?item=${item.item_id}`,
+    })),
+    ...abnormalLosses.map((loss) => ({
+      id: `perte-${loss.itemId}`,
+      name: loss.name,
+      label: "Pertes anormales",
+      detail: `${loss.units} unités · ${formatCurrency(loss.cost, currency)}`,
+      tone: "danger" as const,
+      href: "/movements?type=perte",
+    })),
+    ...dormantItems.map((item) => ({
+      id: `dormant-${item.item_id}`,
+      name: getProductName(item.name, item.brand),
+      label: "Stock dormant",
+      detail: "Aucune vente depuis au moins 30 jours",
+      tone: "neutral" as const,
+      href: `/stocks?item=${item.item_id}`,
+    })),
+  ];
 
   const commercialValue = stockItems
     .filter((item) => item.kind === "commercialise")
@@ -401,29 +481,6 @@ export default async function DashboardPage({
     stockValue > 0
       ? Math.round((commercialValue / stockValue) * 100)
       : 0;
-
-  const dateKeyFormatter = new Intl.DateTimeFormat("fr-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-
-  const todayKey = dateKeyFormatter.format(new Date());
-
-  const todayMovements = movements.filter(
-    (movement) =>
-      dateKeyFormatter.format(new Date(movement.created_at)) ===
-      todayKey,
-  );
-
-  const incomingToday = todayMovements.filter(
-    (movement) => movement.type === "entree",
-  ).length;
-
-  const outgoingToday = todayMovements.filter((movement) =>
-    ["vente", "sortie", "perte"].includes(movement.type),
-  ).length;
 
   const recentMovements = movements.slice(0, 5);
 
@@ -477,47 +534,70 @@ export default async function DashboardPage({
       </div>
 
       <section
-        className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
+        className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
         aria-label="Indicateurs clés"
       >
         <MetricCard
           label={`Chiffre d’affaires · ${periodDays} j`}
-          value={formatCurrency(revenue, currency)}
-          detail={`${unitsSold} produit${unitsSold > 1 ? "s" : ""} vendu${unitsSold > 1 ? "s" : ""}`}
+          value={formatCurrency(profitability.revenue, currency)}
+          detail={`${profitability.unitsSold} produit${profitability.unitsSold > 1 ? "s" : ""} vendu${profitability.unitsSold > 1 ? "s" : ""}`}
           icon={<Banknote size={18} />}
           tone="success"
         />
 
         <MetricCard
-          label="Valeur du stock"
-          value={formatCurrency(stockValue, currency)}
-          detail={`${stockItems.length} articles suivis`}
-          icon={<TrendingUp size={18} />}
+          label={`Marge brute · ${periodDays} j`}
+          value={formatCurrency(profitability.grossMargin, currency)}
+          detail="Chiffre d’affaires − coût d’achat"
+          icon={<Coins size={18} />}
           tone="success"
         />
 
         <MetricCard
-          label="Articles à surveiller"
-          value={String(watchedItems.length)}
-          detail={`${outOfStock.length} en rupture`}
-          icon={<CircleAlert size={18} />}
-          tone="warning"
-        />
-
-        <MetricCard
-          label="Mouvements aujourd’hui"
-          value={String(todayMovements.length)}
-          detail={`${outgoingToday} sorties · ${incomingToday} entrées`}
-          icon={<ArrowUpRight size={18} />}
+          label="Taux de marge"
+          value={`${profitability.marginRate.toFixed(1)} %`}
+          detail={`${formatCurrency(profitability.costOfGoods, currency)} de marchandises vendues`}
+          icon={<Percent size={18} />}
           tone="brand"
         />
 
         <MetricCard
+          label="Bénéfice stock estimé"
+          value={formatCurrency(profitability.estimatedProfit, currency)}
+          detail="Marge brute − pertes enregistrées"
+          icon={<TrendingUp size={18} />}
+          tone={profitability.estimatedProfit >= 0 ? "success" : "danger"}
+        />
+
+        <MetricCard
           label={`Pertes · ${periodDays} j`}
-          value={String(unitsLost)}
-          detail={`${formatCurrency(lossCost, currency)} au coût d’achat`}
+          value={formatCurrency(profitability.lossCost, currency)}
+          detail={`${profitability.unitsLost} unité${profitability.unitsLost > 1 ? "s" : ""} perdue${profitability.unitsLost > 1 ? "s" : ""}`}
           icon={<TriangleAlert size={18} />}
           tone="danger"
+        />
+
+        <MetricCard
+          label="Alertes intelligentes"
+          value={String(smartAlerts.length)}
+          detail={`${outOfStock.length} rupture${outOfStock.length > 1 ? "s" : ""} · ${dormantItems.length} dormant${dormantItems.length > 1 ? "s" : ""}`}
+          icon={<CircleAlert size={18} />}
+          tone="warning"
+        />
+      </section>
+
+      <section className="mt-5 grid gap-5 xl:grid-cols-2">
+        <RankingCard
+          title="Produits les plus rentables"
+          description={`Classement par marge brute sur ${periodDays} jours`}
+          items={profitability.products}
+          currency={currency}
+        />
+        <RankingCard
+          title="Catégories les plus rentables"
+          description={`Contribution à la marge sur ${periodDays} jours`}
+          items={profitability.categories}
+          currency={currency}
         />
       </section>
 
@@ -525,26 +605,26 @@ export default async function DashboardPage({
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold tracking-tight">
-              Produits vendus
+              Produits qui coûtent de l’argent
             </h2>
             <p className="mt-1 text-sm text-foreground/52">
-              Classement par chiffre d’affaires sur {periodDays} jours
+              Prix de vente inférieur ou égal au coût d’achat
             </p>
           </div>
-          <p className="mt-2 text-sm font-semibold text-brand-strong sm:mt-0">
-            {sales.length} vente{sales.length > 1 ? "s" : ""}
-          </p>
         </div>
 
-        {productSales.length ? (
+        {profitability.products.filter((product) => product.margin <= 0).length ? (
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {productSales.slice(0, 6).map((product, index) => (
+            {profitability.products
+              .filter((product) => product.margin <= 0)
+              .slice(0, 6)
+              .map((product) => (
               <article
-                key={product.name}
+                key={product.id}
                 className="flex min-w-0 items-center gap-3 rounded-xl bg-surface-muted/55 p-3"
               >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-sidebar text-xs font-semibold text-white">
-                  {index + 1}
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-danger/10 text-danger">
+                  <ArrowDownRight size={17} />
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">
@@ -554,15 +634,15 @@ export default async function DashboardPage({
                     {product.quantity} unité{product.quantity > 1 ? "s" : ""}
                   </p>
                 </div>
-                <p className="ml-auto shrink-0 font-mono text-xs font-semibold">
-                  {formatCurrency(product.revenue, currency)}
+                <p className="ml-auto shrink-0 font-mono text-xs font-semibold text-danger">
+                  {formatCurrency(product.margin, currency)}
                 </p>
               </article>
             ))}
           </div>
         ) : (
           <p className="mt-5 rounded-xl bg-surface-muted/45 px-4 py-8 text-center text-sm text-foreground/50">
-            Aucune vente sur cette période.
+            Aucun produit vendu à perte sur cette période.
           </p>
         )}
       </section>
@@ -577,7 +657,7 @@ export default async function DashboardPage({
               </h2>
 
               <p className="mt-1 text-sm text-foreground/52">
-                À traiter pour éviter une rupture
+                Ruptures, faibles niveaux, dormance et pertes inhabituelles
               </p>
             </div>
 
@@ -590,61 +670,62 @@ export default async function DashboardPage({
           </div>
 
           <div className="mt-5 divide-y divide-border">
-            {watchedItems.slice(0, 3).map((item) => (
+            {smartAlerts.slice(0, 5).map((alert) => (
               <div
-                key={item.item_id}
+                key={alert.id}
                 className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <span
                     className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                      item.stock_status === "rupture"
+                      alert.tone === "danger"
                         ? "bg-danger"
-                        : "bg-warning"
+                        : alert.tone === "warning"
+                          ? "bg-warning"
+                          : "bg-foreground/30"
                     }`}
                   />
 
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">
-                      {getProductName(item.name, item.brand)}
+                      {alert.name}
                     </p>
 
                     <p className="mt-1 text-xs text-foreground/48">
-                      {item.kind === "commercialise"
-                        ? "Stock commercialisé"
-                        : "Outils & consommables"}
+                      {alert.detail}
                     </p>
                   </div>
                 </div>
 
                 <p
                   className={`text-sm font-semibold ${
-                    item.stock_status === "rupture"
+                    alert.tone === "danger"
                       ? "text-danger"
-                      : "text-warning"
+                      : alert.tone === "warning"
+                        ? "text-warning"
+                        : "text-foreground/55"
                   }`}
                 >
-                  {Number(item.quantity)} {item.unit}
-                  {Number(item.quantity) > 1 ? "s" : ""}
+                  {alert.label}
                 </p>
 
                 <Link
-                  href={`/stocks?item=${item.item_id}`}
+                  href={alert.href}
                   className="inline-flex h-9 items-center justify-center rounded-lg border border-border px-3 text-xs font-semibold hover:border-brand/40 hover:bg-brand/5"
                 >
-                  Mettre à jour
+                  Examiner
                 </Link>
               </div>
             ))}
 
-            {watchedItems.length === 0 ? (
+            {smartAlerts.length === 0 ? (
               <div className="py-10 text-center">
                 <p className="font-semibold text-success">
-                  Aucun stock préoccupant
+                  Aucun signal préoccupant
                 </p>
 
                 <p className="mt-2 text-sm text-foreground/48">
-                  Tous les articles sont au-dessus de leur seuil.
+                  Stocks, rotation et pertes sont sous contrôle.
                 </p>
               </div>
             ) : null}
@@ -927,6 +1008,64 @@ function MetricCard({
         {detail}
       </p>
     </article>
+  );
+}
+
+function RankingCard({
+  title,
+  description,
+  items,
+  currency,
+}: {
+  title: string;
+  description: string;
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    margin: number;
+    marginRate: number;
+  }>;
+  currency: string;
+}) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-border bg-surface p-5 shadow-[0_12px_40px_rgb(57_45_30_/_5%)] sm:p-6">
+      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+      <p className="mt-1 text-sm text-foreground/52">{description}</p>
+
+      {items.length ? (
+        <ol className="mt-5 space-y-3">
+          {items.slice(0, 5).map((item, index) => (
+            <li
+              key={item.id}
+              className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl bg-surface-muted/55 p-3"
+            >
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-sidebar text-xs font-semibold text-white">
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{item.name}</p>
+                <p className="mt-1 text-xs text-foreground/48">
+                  {item.quantity} unité{item.quantity > 1 ? "s" : ""} ·{" "}
+                  {item.marginRate.toFixed(1)} %
+                </p>
+              </div>
+              <p
+                className={`shrink-0 font-mono text-xs font-semibold ${
+                  item.margin >= 0 ? "text-success" : "text-danger"
+                }`}
+              >
+                {formatCurrency(item.margin, currency)}
+              </p>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-5 rounded-xl bg-surface-muted/45 px-4 py-8 text-center text-sm text-foreground/50">
+          Aucune vente sur cette période.
+        </p>
+      )}
+    </section>
   );
 }
 
