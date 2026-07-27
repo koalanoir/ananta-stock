@@ -395,7 +395,10 @@ begin
       current_quantity,
       current_quantity - line_quantity,
       'Facture ' || generated_number,
-      public.gen_random_uuid(),
+      coalesce(
+        nullif(cart_line ->> 'movement_id', '')::uuid,
+        pg_catalog.gen_random_uuid()
+      ),
       auth.uid()
     );
 
