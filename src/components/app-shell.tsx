@@ -7,6 +7,7 @@ import {
   ReceiptText,
   Settings,
   ShoppingCart,
+  Truck,
   Users,
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
@@ -20,6 +21,7 @@ type AppShellProps = {
     | "movements"
     | "invoices"
     | "customers"
+    | "orders"
     | "settings";
   role?: UserRole;
   storeName?: string;
@@ -33,6 +35,7 @@ const managerNavigation = [
   { key: "movements", label: "Mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
   { key: "invoices", label: "Factures", href: "/invoices", icon: ReceiptText },
   { key: "customers", label: "Clients", href: "/customers", icon: Users },
+  { key: "orders", label: "Commandes", mobileLabel: "Commandes", href: "/orders", icon: Truck },
   { key: "settings", label: "Paramètres", mobileLabel: "Params", href: "/settings", icon: Settings },
 ] as const;
 
@@ -41,6 +44,7 @@ const sellerNavigation = [
   { key: "invoices", label: "Factures", href: "/invoices", icon: ReceiptText },
   { key: "stocks", label: "Comptage rapide", mobileLabel: "Comptage", href: "/count", icon: ClipboardCheck },
   { key: "movements", label: "Mes mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
+  { key: "orders", label: "Réceptions", href: "/orders", icon: Truck },
 ] as const;
 
 export function AppShell({ active, role = "manager", storeName = "Ma boutique", userName = "Utilisateur", children }: AppShellProps) {
@@ -91,12 +95,12 @@ export function AppShell({ active, role = "manager", storeName = "Ma boutique", 
         </header>
         <main className="mx-auto w-full max-w-[1240px] px-4 py-6 pb-24 sm:px-7 lg:px-10 lg:py-10 lg:pb-10">{children}</main>
 
-        <nav className={`fixed inset-x-0 bottom-0 z-40 grid min-h-16 w-screen max-w-full ${isSeller ? "grid-cols-4" : "grid-cols-6"} border-t border-border bg-surface/96 px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgb(35_55_46_/_8%)] backdrop-blur lg:hidden`} aria-label="Navigation mobile">
+        <nav className="fixed inset-x-0 bottom-0 z-40 flex min-h-16 w-screen max-w-full overflow-x-auto border-t border-border bg-surface/96 px-1 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-8px_24px_rgb(35_55_46_/_8%)] backdrop-blur lg:hidden" aria-label="Navigation mobile">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = active === item.key;
             return (
-              <Link key={item.key} href={item.href} title={item.label} className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-[0.58rem] font-medium sm:text-[0.66rem] ${isActive ? "text-brand-strong" : "text-foreground/55"}`}>
+              <Link key={item.key} href={item.href} title={item.label} className={`flex min-h-12 min-w-[4.25rem] flex-1 flex-col items-center justify-center gap-1 rounded-lg px-0.5 text-[0.58rem] font-medium sm:text-[0.66rem] ${isActive ? "text-brand-strong" : "text-foreground/55"}`}>
                 <Icon size={20} strokeWidth={isActive ? 2.2 : 1.7} aria-hidden="true" />
                 <span className="max-w-full truncate">
                   {"mobileLabel" in item ? item.mobileLabel : item.label}

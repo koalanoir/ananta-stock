@@ -46,10 +46,7 @@ export function createInvoicePdf({
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text("ANANTA STOCK", left, 15);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text(storeName, left, 23);
+  doc.text(doc.splitTextToSize(storeName, 105), left, 15);
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.text("FACTURE", right, 15, { align: "right" });
@@ -128,7 +125,7 @@ export function createInvoicePdf({
   doc.setFontSize(8);
   doc.setTextColor(115, 112, 104);
   doc.text(
-    "Merci pour votre confiance. Facture générée avec Ananta Stock.",
+    "Merci pour votre confiance.",
     105,
     289,
     { align: "center" },
