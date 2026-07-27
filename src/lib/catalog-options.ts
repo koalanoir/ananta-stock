@@ -1,0 +1,32 @@
+export const CATALOG_CATEGORIES = [
+  "Alimentation",
+  "Boissons",
+  "Épicerie",
+  "Produits frais",
+  "Hygiène",
+  "Entretien",
+  "Emballage",
+  "Fournitures",
+  "Équipement",
+  "Textile",
+  "Beauté",
+  "Autre",
+] as const;
+
+export const CATALOG_UNITS = [
+  "unité",
+  "pièce",
+  "paquet",
+  "sachet",
+  "sac",
+  "bouteille",
+  "bidon",
+  "boîte",
+  "carton",
+  "rouleau",
+  "kilogramme",
+  "gramme",
+  "litre",
+  "millilitre",
+  "mètre",
+] as const;
