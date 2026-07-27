@@ -138,6 +138,7 @@ export function InvoicesClient({
       cart_items: cartLines.map((line) => ({
         item_id: line.id,
         quantity: line.cartQuantity,
+        movement_id: crypto.randomUUID(),
       })),
       request_id: crypto.randomUUID(),
     });
