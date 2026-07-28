@@ -28,9 +28,9 @@ export default async function MenuPage() {
   if (!storeId) throw new Error("Aucun magasin actif.");
 
   const [storeResult, ingredientsResult, menuResult] = await Promise.all([
-    supabase.from("stores").select("name, currency").eq("id", storeId).single(),
+    supabase.from("stores").select("name, currency, business_type").eq("id", storeId).single(),
     supabase.from("items").select("id, name, brand, unit, stock:stock_levels(quantity)")
-      .eq("store_id", storeId).eq("kind", "outil").eq("active", true).order("name"),
+      .eq("store_id", storeId).eq("kind", "ingredient").eq("active", true).order("name"),
     supabase.from("menu_items").select(`
       id, name, description, type, selling_price, active,
       menu_item_ingredients(id, item_id, quantity_required)
@@ -39,6 +39,7 @@ export default async function MenuPage() {
   const error = storeResult.error ?? ingredientsResult.error ?? menuResult.error;
   if (error) throw new Error(`Impossible de charger la carte : ${error.message}`);
   if (!storeResult.data) throw new Error("Magasin introuvable.");
+  if (storeResult.data.business_type !== "restaurant") redirect("/stocks");
 
   const ingredients = (ingredientsResult.data ?? []).map((row) => ({
     id: row.id, name: row.name, brand: row.brand ?? "", unit: row.unit,
