@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
+import {
+  ACCOUNT_SESSION_COOKIE,
+  verifyAccountSessionToken,
+} from "@/lib/account-session";
+import { AccountSessionProvider } from "@/components/account-session-provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,10 +31,21 @@ export const viewport: Viewport = {
   themeColor: "#23372e",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  const cookieStore = await cookies();
+  const accountSession = await verifyAccountSessionToken(
+    cookieStore.get(ACCOUNT_SESSION_COOKIE)?.value,
+  );
+
   return (
     <html lang="fr" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AccountSessionProvider value={accountSession}>
+          {children}
+        </AccountSessionProvider>
+      </body>
     </html>
   );
 }

@@ -55,7 +55,7 @@ export async function GET(request: Request) {
         : "/";
 
     return NextResponse.redirect(
-      new URL(destination, requestUrl.origin),
+      sessionBootstrapUrl(requestUrl, destination),
     );
   }
 
@@ -70,11 +70,6 @@ export async function GET(request: Request) {
 
   const accountType =
     data.user.user_metadata?.account_type;
-  const businessType =
-    data.user.user_metadata?.business_type === "restaurant"
-      ? "restaurant"
-      : "retail";
-
   if (
     accountType !== "owner" ||
     !organizationName ||
@@ -92,7 +87,7 @@ export async function GET(request: Request) {
       {
         organization_name: organizationName,
         store_name: storeName,
-        selected_business_type: businessType,
+        selected_business_type: "retail",
       },
     );
 
@@ -104,11 +99,20 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(
-    new URL(
-      businessType === "restaurant" ? "/menu" : "/stocks",
-      requestUrl.origin,
-    ),
+    sessionBootstrapUrl(requestUrl, "/stocks"),
   );
+}
+
+function sessionBootstrapUrl(
+  requestUrl: URL,
+  destination: string,
+) {
+  const bootstrap = new URL(
+    "/api/auth/session-context",
+    requestUrl.origin,
+  );
+  bootstrap.searchParams.set("next", destination);
+  return bootstrap;
 }
 
 function redirectToLogin(

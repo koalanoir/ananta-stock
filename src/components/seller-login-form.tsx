@@ -63,8 +63,30 @@ export function SellerLoginForm() {
       return;
     }
 
+    setPending(true);
+    const sessionResponse = await fetch(
+      "/api/auth/session-context",
+      { method: "POST" },
+    );
+
+    if (!sessionResponse.ok) {
+      const sessionResult = (await sessionResponse.json()) as {
+        error?: string;
+      };
+      setErrorMessage(
+        sessionResult.error ??
+          "La configuration du compte n’a pas pu être chargée.",
+      );
+      setPending(false);
+      return;
+    }
+
+    const sessionResult = (await sessionResponse.json()) as {
+      destination?: string;
+    };
+    setPending(false);
     router.replace(
-      result.destination ?? "/sales",
+      sessionResult.destination ?? result.destination ?? "/sales",
     );
 
     router.refresh();

@@ -55,7 +55,9 @@ export function AdminDashboardClient({ initialAccounts }: { initialAccounts: Adm
     setPendingId("");
     if (!response.ok) return setError(result.error ?? "Enregistrement impossible.");
     if (result.settings) update(account.id, result.settings);
-    setMessage(`Configuration de ${account.name} enregistrée.`);
+    setMessage(
+      `Configuration de ${account.name} enregistrée. Elle s’appliquera à la prochaine connexion de ses utilisateurs.`,
+    );
   }
 
   async function remove(account: AdminAccount) {
@@ -105,7 +107,7 @@ export function AdminDashboardClient({ initialAccounts }: { initialAccounts: Adm
                 <label className="text-sm font-semibold">Nombre maximal de vendeurs<input type="number" min="0" max="500" value={account.maxSellers} onChange={(event) => update(account.id, { maxSellers: Number(event.target.value) })} className={fieldClass} /><span className="mt-1 block text-xs font-normal text-foreground/45">{account.sellerCount} actuellement</span></label>
                 <div><p className="text-sm font-semibold">Conservation des données</p><Toggle checked={account.retainCustomerOrders} onChange={(value) => update(account.id, { retainCustomerOrders: value })} label="Commandes clients" /><Toggle checked={account.retainInvoices} onChange={(value) => update(account.id, { retainInvoices: value })} label="Factures" /></div>
               </div>
-              <div className="mt-5 border-t border-border pt-5"><h3 className="font-semibold">Fonctionnalités autorisées</h3><p className="mt-1 text-xs text-foreground/45">Les onglets désactivés sont masqués et leurs routes sont bloquées.</p><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{ACCOUNT_FEATURES.map((feature) => <Toggle key={feature.key} checked={account.featureFlags[feature.key]} onChange={(value) => update(account.id, { featureFlags: { ...account.featureFlags, [feature.key]: value } })} label={feature.label} />)}</div></div>
+              <div className="mt-5 border-t border-border pt-5"><h3 className="font-semibold">Fonctionnalités autorisées</h3><p className="mt-1 text-xs text-foreground/45">Les droits sont figés à la connexion : une modification prend effet après la déconnexion puis la reconnexion des utilisateurs concernés.</p><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{ACCOUNT_FEATURES.map((feature) => <Toggle key={feature.key} checked={account.featureFlags[feature.key]} onChange={(value) => update(account.id, { featureFlags: { ...account.featureFlags, [feature.key]: value } })} label={feature.label} />)}</div></div>
               <button disabled={pendingId === account.id || !account.storeId} onClick={() => save(account)} className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white disabled:opacity-50">{pendingId === account.id ? <LoaderCircle size={17} className="animate-spin" /> : <Save size={17} />} Enregistrer</button>
             </article>
           ))}

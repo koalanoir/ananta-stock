@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import {
   BarChart3,
   Boxes,
@@ -18,11 +17,8 @@ import {
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 import { SessionControls } from "@/components/session-controls";
-import { getCurrentMembership } from "@/lib/data/current-user";
-import {
-  DEFAULT_FEATURE_FLAGS,
-  normalizeFeatureFlags,
-} from "@/lib/account-features";
+import { useAccountSession } from "@/components/account-session-provider";
+import { DEFAULT_FEATURE_FLAGS } from "@/lib/account-features";
 
 type BusinessType = "retail" | "restaurant";
 
@@ -71,41 +67,13 @@ const sellerNavigation = [
 ] as const;
 
 export function AppShell({ active, role = "manager", storeName = "Ma boutique", userName = "Utilisateur", businessType, children }: AppShellProps) {
-  const isSeller = role === "seller";
-  const [detectedBusinessType, setDetectedBusinessType] =
-    useState<BusinessType>("retail");
-  const [featureFlags, setFeatureFlags] = useState(DEFAULT_FEATURE_FLAGS);
-  const resolvedBusinessType = businessType ?? detectedBusinessType;
-
-  useEffect(() => {
-    if (businessType) return;
-
-    let mounted = true;
-    void getCurrentMembership()
-      .then((membership) => {
-        const store = membership.stores as { business_type?: string } | null;
-        const organization = membership.organizations as {
-          account_settings?: { feature_flags?: unknown } | null;
-        } | null;
-        if (mounted) {
-          setDetectedBusinessType(
-            store?.business_type === "restaurant" ? "restaurant" : "retail",
-          );
-          setFeatureFlags(
-            normalizeFeatureFlags(
-              organization?.account_settings?.feature_flags,
-            ),
-          );
-        }
-      })
-      .catch(() => {
-        if (mounted) setDetectedBusinessType("retail");
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [businessType]);
+  const accountSession = useAccountSession();
+  const resolvedRole = accountSession?.role ?? role;
+  const isSeller = resolvedRole === "seller";
+  const resolvedBusinessType =
+    accountSession?.businessType ?? businessType ?? "retail";
+  const featureFlags =
+    accountSession?.featureFlags ?? DEFAULT_FEATURE_FLAGS;
 
   const navigation = (isSeller ? sellerNavigation : managerNavigation).filter(
     (item) =>
@@ -143,7 +111,7 @@ export function AppShell({ active, role = "manager", storeName = "Ma boutique", 
           <p className="text-[0.65rem] font-semibold tracking-[0.14em] text-white/48">BOUTIQUE</p>
           <p className="mt-2 truncate text-sm font-semibold" title={storeName}>{storeName}</p>
           <p className="mt-1 truncate text-xs text-white/55" title={userName}>{userName} · {isSeller ? "Vendeur" : "Gestionnaire"}</p>
-          <SessionControls role={role} />
+          <SessionControls role={resolvedRole} />
         </div>
       </aside>
 
@@ -152,7 +120,7 @@ export function AppShell({ active, role = "manager", storeName = "Ma boutique", 
           <Link href="/" className="font-bold tracking-[0.12em]">ANANTA <span className="text-brand">STOCK</span></Link>
           <div className="flex min-w-0 items-center gap-2">
             <span className="max-w-[34vw] truncate rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium">{storeName}</span>
-            <SessionControls role={role} compact />
+            <SessionControls role={resolvedRole} compact />
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1240px] px-4 py-6 pb-24 sm:px-7 lg:px-10 lg:py-10 lg:pb-10">{children}</main>

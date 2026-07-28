@@ -24,16 +24,12 @@ export async function getCurrentMembership() {
       role,
       active,
       organizations (
-        name,
-        account_settings (
-          feature_flags
-        )
+        name
       ),
       stores (
         name,
         currency,
-        timezone,
-        business_type
+        timezone
       )
     `)
     .eq("user_id", user.id)
