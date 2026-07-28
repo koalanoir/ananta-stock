@@ -14,6 +14,11 @@ import { CATALOG_CATEGORIES, CATALOG_UNITS } from "@/lib/catalog-options";
 type Filter = "all" | "watch" | "rupture";
 
 const statusLabel = { ok: "Disponible", surveillance: "À surveiller", rupture: "En rupture" } as const;
+const kindLabel = {
+  commercialise: "Commercialisé",
+  outil: "Utilitaire",
+  ingredient: "Ingrédient",
+} as const;
 
 export default function StocksPage() {
   return <Suspense fallback={<div className="min-h-screen bg-background" />}><StocksContent /></Suspense>;
@@ -188,7 +193,7 @@ function StocksContent() {
                     <span className={`rounded-full px-2 py-1 text-[0.65rem] font-semibold ${status === "rupture" ? "bg-danger/10 text-danger" : status === "surveillance" ? "bg-warning/10 text-warning" : "bg-success/10 text-success"}`}>{statusLabel[status]}</span>
                   </div>
                   <h2 className="mt-3 break-words text-base font-semibold leading-5">{item.name}</h2>
-                  <p className="mt-1.5 text-xs text-foreground/48">{item.category} · {item.kind === "commercialise" ? "Stock commercialisé" : "Outil / consommable"}</p>
+                  <p className="mt-1.5 text-xs text-foreground/48">{item.category} · {kindLabel[item.kind]}</p>
 
                   <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-surface-muted/55 p-3">
                     <div><dt className="text-[0.65rem] uppercase tracking-[0.08em] text-foreground/42">Disponible</dt><dd className="mt-1 font-mono text-xl font-semibold">{item.quantity} <span className="font-sans text-xs font-normal text-foreground/45">{item.unit}{item.quantity > 1 ? "s" : ""}</span></dd></div>
@@ -207,7 +212,7 @@ function StocksContent() {
               <tbody className="divide-y divide-border">
                 {filteredItems.map((item) => {
                   const status = getStockStatus(item);
-                  return <tr key={item.id} className="transition hover:bg-surface-muted/25"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className={`h-8 w-1 rounded-full ${status === "rupture" ? "bg-danger" : status === "surveillance" ? "bg-warning" : "bg-success"}`} /><div><p className="font-semibold">{item.name}</p><p className={`mt-1 text-xs ${status === "rupture" ? "text-danger" : status === "surveillance" ? "text-warning" : "text-success"}`}>{statusLabel[status]}</p></div></div></td><td className="px-4 py-4 text-foreground/58">{item.category}</td><td className="px-4 py-4 text-foreground/58">{item.kind === "commercialise" ? "Commercialisé" : "Outil"}</td><td className="px-4 py-4 text-center font-mono text-base font-semibold">{item.quantity}</td><td className="px-4 py-4 text-center font-mono text-foreground/52">{item.threshold}</td><td className="px-5 py-4 text-right"><button onClick={() => setEditingItem(item)} className="h-9 rounded-lg border border-border px-3 text-xs font-semibold transition hover:border-brand/45 hover:bg-brand/5">Mettre à jour</button></td></tr>;
+                  return <tr key={item.id} className="transition hover:bg-surface-muted/25"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className={`h-8 w-1 rounded-full ${status === "rupture" ? "bg-danger" : status === "surveillance" ? "bg-warning" : "bg-success"}`} /><div><p className="font-semibold">{item.name}</p><p className={`mt-1 text-xs ${status === "rupture" ? "text-danger" : status === "surveillance" ? "text-warning" : "text-success"}`}>{statusLabel[status]}</p></div></div></td><td className="px-4 py-4 text-foreground/58">{item.category}</td><td className="px-4 py-4 text-foreground/58">{kindLabel[item.kind]}</td><td className="px-4 py-4 text-center font-mono text-base font-semibold">{item.quantity}</td><td className="px-4 py-4 text-center font-mono text-foreground/52">{item.threshold}</td><td className="px-5 py-4 text-right"><button onClick={() => setEditingItem(item)} className="h-9 rounded-lg border border-border px-3 text-xs font-semibold transition hover:border-brand/45 hover:bg-brand/5">Mettre à jour</button></td></tr>;
                 })}
               </tbody>
             </table>
@@ -243,9 +248,54 @@ function MovementDialog({ item, pending, onClose, onSubmit }: { item: StockItem;
 }
 
 function AddItemDialog({ pending, onClose, onSubmit }: { pending: boolean; onClose: () => void; onSubmit: (item: CreateStockItemInput) => Promise<void> }) {
-  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const data = new FormData(event.currentTarget); const brand = String(data.get("brand")).trim(); const product = String(data.get("product")).trim(); void onSubmit({ name: product, brand, category: String(data.get("category")).trim(), kind: data.get("kind") as StockItem["kind"], unit: String(data.get("unit")).trim(), quantity: Number(data.get("quantity")), threshold: Number(data.get("threshold")), unitCost: Number(data.get("unitCost")), sellingPrice: Number(data.get("sellingPrice")) }); }
+  const [kind, setKind] = useState<StockItem["kind"]>("commercialise");
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const brand = String(data.get("brand")).trim();
+    const product = String(data.get("product")).trim();
+    void onSubmit({
+      name: product,
+      brand,
+      category: String(data.get("category")).trim(),
+      kind,
+      unit: String(data.get("unit")).trim(),
+      quantity: Number(data.get("quantity")),
+      threshold: Number(data.get("threshold")),
+      unitCost: Number(data.get("unitCost")),
+      sellingPrice:
+        kind === "commercialise" ? Number(data.get("sellingPrice")) : 0,
+    });
+  }
   const fieldClass = "mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-brand";
-  return <Dialog title="Ajouter un article" onClose={onClose}><form onSubmit={submit} className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold">Produit et format<input name="product" required autoFocus className={fieldClass} placeholder="Ex. Farine de blé 1 kg" /></label><label className="text-sm font-semibold">Marque <span className="font-normal text-foreground/45">(facultatif)</span><input name="brand" className={fieldClass} placeholder="Ex. Francine" /></label><p className="-mt-2 text-xs text-foreground/50 sm:col-span-2">La marque permet de distinguer deux produits identiques, mais elle peut rester vide.</p><label className="text-sm font-semibold">Catégorie<select name="category" required defaultValue="" className={fieldClass}><option value="" disabled>Sélectionner une catégorie</option>{CATALOG_CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}</select></label><label className="text-sm font-semibold">Type<select name="kind" className={fieldClass}><option value="commercialise">Commercialisé</option><option value="outil">Outil / consommable</option></select></label><label className="text-sm font-semibold">Unité<select name="unit" required defaultValue="" className={fieldClass}><option value="" disabled>Sélectionner une unité</option>{CATALOG_UNITS.map((name) => <option key={name} value={name}>{name}</option>)}</select></label><label className="text-sm font-semibold">Quantité initiale<input name="quantity" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><label className="text-sm font-semibold">Seuil d’alerte<input name="threshold" type="number" min="0" defaultValue="5" required className={fieldClass} /></label><label className="text-sm font-semibold">Coût unitaire (FCFA)<input name="unitCost" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><label className="text-sm font-semibold">Prix de vente (FCFA)<input name="sellingPrice" type="number" min="0" defaultValue="0" required className={fieldClass} /></label><button disabled={pending} className="mt-2 h-12 rounded-xl bg-brand font-semibold text-white hover:bg-brand-strong disabled:opacity-50 sm:col-span-2">{pending ? "Ajout…" : "Ajouter l’article"}</button></form></Dialog>;
+  return <Dialog title="Ajouter un article" onClose={onClose}>
+    <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+      <label className="text-sm font-semibold">Produit et format<input name="product" required autoFocus className={fieldClass} placeholder="Ex. Farine de blé 1 kg" /></label>
+      <label className="text-sm font-semibold">Marque <span className="font-normal text-foreground/45">(facultatif)</span><input name="brand" className={fieldClass} placeholder="Ex. Francine" /></label>
+      <p className="-mt-2 text-xs text-foreground/50 sm:col-span-2">La marque permet de distinguer deux produits identiques, mais elle peut rester vide.</p>
+      <label className="text-sm font-semibold">Catégorie<select name="category" required defaultValue="" className={fieldClass}><option value="" disabled>Sélectionner une catégorie</option>{CATALOG_CATEGORIES.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+      <label className="text-sm font-semibold">Usage
+        <select value={kind} onChange={(event) => setKind(event.target.value as StockItem["kind"])} className={fieldClass}>
+          <option value="commercialise">Commercialisé</option>
+          <option value="outil">Utilitaire</option>
+          <option value="ingredient">Ingrédient</option>
+        </select>
+      </label>
+      <p className="-mt-2 text-xs text-foreground/50 sm:col-span-2">
+        {kind === "commercialise"
+          ? "Cet article est vendu directement et possède un prix de vente."
+          : kind === "ingredient"
+            ? "Cet article entre dans les recettes et n’est pas vendu directement."
+            : "Cet article sert au fonctionnement du commerce et n’est pas vendu."}
+      </p>
+      <label className="text-sm font-semibold">Unité<select name="unit" required defaultValue="" className={fieldClass}><option value="" disabled>Sélectionner une unité</option>{CATALOG_UNITS.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+      <label className="text-sm font-semibold">Quantité initiale<input name="quantity" type="number" min="0" defaultValue="0" required className={fieldClass} /></label>
+      <label className="text-sm font-semibold">Seuil d’alerte<input name="threshold" type="number" min="0" defaultValue="5" required className={fieldClass} /></label>
+      <label className="text-sm font-semibold">Coût unitaire (FCFA)<input name="unitCost" type="number" min="0" defaultValue="0" required className={fieldClass} /></label>
+      {kind === "commercialise" ? <label className="text-sm font-semibold">Prix de vente (FCFA)<input name="sellingPrice" type="number" min="0" defaultValue="0" required className={fieldClass} /></label> : null}
+      <button disabled={pending} className="mt-2 h-12 rounded-xl bg-brand font-semibold text-white hover:bg-brand-strong disabled:opacity-50 sm:col-span-2">{pending ? "Ajout…" : "Ajouter l’article"}</button>
+    </form>
+  </Dialog>;
 }
 
 function toStockItem(row: StockOverviewRow): StockItem {
