@@ -24,7 +24,7 @@ export default async function RestaurantOrdersPage() {
   }
   if (!storeId) throw new Error("Aucun magasin actif.");
   const [storeResult, ordersResult] = await Promise.all([
-    supabase.from("stores").select("name, currency, business_type").eq("id", storeId).single(),
+    supabase.from("stores").select("name, currency").eq("id", storeId).single(),
     supabase.from("customer_orders").select(`
       id, order_number, table_reference, preparation_status, payment_status,
       invoice_id, created_at,
@@ -38,7 +38,6 @@ export default async function RestaurantOrdersPage() {
   const error = storeResult.error ?? ordersResult.error;
   if (error) throw new Error(`Impossible de charger les commandes clients : ${error.message}`);
   if (!storeResult.data) throw new Error("Magasin introuvable.");
-  if (storeResult.data.business_type !== "restaurant") redirect("/stocks");
   const orders = (ordersResult.data ?? []).map((order) => ({
     ...order,
     customer_order_items: (order.customer_order_items ?? []).map((line) => ({

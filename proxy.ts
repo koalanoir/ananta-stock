@@ -5,15 +5,19 @@ import {
   verifyPlatformAdminToken,
 } from "@/lib/platform-admin-auth";
 import {
-  normalizeFeatureFlags,
   ROUTE_FEATURES,
 } from "@/lib/account-features";
+import {
+  ACCOUNT_SESSION_COOKIE,
+  verifyAccountSessionToken,
+} from "@/lib/account-session";
 
 const publicRoutes = [
   "/login",
   "/register",
   "/auth/callback",
   "/api/auth/seller-login",
+  "/api/auth/session-context",
 ];
 
 export async function proxy(request: NextRequest) {
@@ -114,7 +118,32 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user) {
+  if (user && !isPublicRoute) {
+    const accountSession = await verifyAccountSessionToken(
+      request.cookies.get(ACCOUNT_SESSION_COOKIE)?.value,
+    );
+
+    if (!accountSession || accountSession.userId !== user.id) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          {
+            error:
+              "La configuration de session est absente. Reconnectez-vous.",
+          },
+          { status: 401 },
+        );
+      }
+
+      const bootstrapUrl = request.nextUrl.clone();
+      bootstrapUrl.pathname = "/api/auth/session-context";
+      bootstrapUrl.search = "";
+      bootstrapUrl.searchParams.set(
+        "next",
+        `${pathname}${request.nextUrl.search}`,
+      );
+      return NextResponse.redirect(bootstrapUrl);
+    }
+
     const routeFeature =
       (pathname.startsWith("/api/invoices") ? "invoices" : undefined) ??
       Object.entries(ROUTE_FEATURES).find(
@@ -124,37 +153,38 @@ export async function proxy(request: NextRequest) {
             : pathname === route || pathname.startsWith(`${route}/`),
       )?.[1];
 
-    if (routeFeature) {
-      const { data: membership } = await supabase
-        .from("memberships")
-        .select("organization_id")
-        .eq("user_id", user.id)
-        .eq("active", true)
-        .limit(1)
-        .maybeSingle();
-
-      if (membership) {
-        const { data: settings } = await supabase
-          .from("account_settings")
-          .select("feature_flags")
-          .eq("organization_id", membership.organization_id)
-          .maybeSingle();
-
-        const flags = normalizeFeatureFlags(settings?.feature_flags);
-        if (!flags[routeFeature]) {
-          if (pathname.startsWith("/api/")) {
-            return NextResponse.json(
-              { error: "Cette fonctionnalité est désactivée pour ce compte." },
-              { status: 403 },
-            );
-          }
-          const disabledUrl = request.nextUrl.clone();
-          disabledUrl.pathname = "/feature-disabled";
-          disabledUrl.search = "";
-          disabledUrl.searchParams.set("feature", routeFeature);
-          return NextResponse.redirect(disabledUrl);
-        }
+    if (routeFeature && !accountSession.featureFlags[routeFeature]) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: "Cette fonctionnalité est désactivée pour ce compte." },
+          { status: 403 },
+        );
       }
+
+      const disabledUrl = request.nextUrl.clone();
+      disabledUrl.pathname = "/feature-disabled";
+      disabledUrl.search = "";
+      disabledUrl.searchParams.set("feature", routeFeature);
+      return NextResponse.redirect(disabledUrl);
+    }
+
+    const isRestaurantRoute = [
+      "/menu",
+      "/pos",
+      "/restaurant-orders",
+    ].some(
+      (route) =>
+        pathname === route || pathname.startsWith(`${route}/`),
+    );
+
+    if (
+      isRestaurantRoute &&
+      accountSession.businessType !== "restaurant"
+    ) {
+      const stocksUrl = request.nextUrl.clone();
+      stocksUrl.pathname = "/stocks";
+      stocksUrl.search = "";
+      return NextResponse.redirect(stocksUrl);
     }
   }
 

@@ -115,6 +115,9 @@ export function SessionControls({ role, compact = false }: SessionControlsProps)
     if (!supabase) return;
 
     setPendingAction("logout");
+    await fetch("/api/auth/session-context", {
+      method: "DELETE",
+    });
     await supabase.auth.signOut();
     router.replace("/login");
     router.refresh();
