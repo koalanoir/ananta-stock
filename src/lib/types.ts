@@ -1,4 +1,4 @@
-export type StockKind = "commercialise" | "outil";
+export type StockKind = "commercialise" | "outil" | "ingredient";
 export type StockStatus = "ok" | "surveillance" | "rupture";
 export type MovementType =
   | "entree"
