@@ -24,7 +24,10 @@ export async function getCurrentMembership() {
       role,
       active,
       organizations (
-        name
+        name,
+        account_settings (
+          feature_flags
+        )
       ),
       stores (
         name,
