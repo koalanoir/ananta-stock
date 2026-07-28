@@ -25,7 +25,7 @@ export function MenuClient({ role, storeId, storeName, currency, userName, ingre
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => initialMenu.filter((entry) =>
     `${entry.name} ${entry.description ?? ""}`.toLowerCase().includes(query.toLowerCase())), [initialMenu, query]);
-  return <AppShell active="menu" role={role} storeName={storeName} userName={userName}>
+  return <AppShell active="menu" role={role} storeName={storeName} userName={userName} businessType="restaurant">
     <PageHeading eyebrow="Restaurant" title="Carte & recettes"
       description="Créez les plats, cocktails et compositions vendus en caisse. Chaque vente déduit automatiquement les ingrédients du stock."
       action={<button onClick={() => setOpen(true)} className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white"><Plus size={18}/> Ajouter à la carte</button>} />
