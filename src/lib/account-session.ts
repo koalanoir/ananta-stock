@@ -20,6 +20,13 @@ export type AccountSessionContext = {
   expiresAt: number;
 };
 
+export class AccountDisabledError extends Error {
+  constructor() {
+    super("Ce compte a été désactivé par l’administrateur de la plateforme.");
+    this.name = "AccountDisabledError";
+  }
+}
+
 type MembershipSnapshot = {
   organization_id: string;
   store_id: string | null;
@@ -30,12 +37,14 @@ type MembershipSnapshot = {
     | null;
   organizations:
     | {
+        access_enabled?: boolean;
         account_settings:
           | { feature_flags?: unknown }
           | Array<{ feature_flags?: unknown }>
           | null;
       }
     | Array<{
+        access_enabled?: boolean;
         account_settings:
           | { feature_flags?: unknown }
           | Array<{ feature_flags?: unknown }>
@@ -58,6 +67,7 @@ export async function loadAccountSessionContext(
         business_type
       ),
       organizations (
+        access_enabled,
         account_settings (
           feature_flags
         )
@@ -95,6 +105,11 @@ export async function loadAccountSessionContext(
   if (!storeId) return null;
 
   const organization = firstRelation(membership.organizations);
+
+  if (organization?.access_enabled === false) {
+    throw new AccountDisabledError();
+  }
+
   const settings = firstRelation(organization?.account_settings ?? null);
   const now = Math.floor(Date.now() / 1000);
 

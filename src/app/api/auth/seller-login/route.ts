@@ -69,6 +69,29 @@ export async function POST(request: Request) {
     return invalidCredentials();
   }
 
+  const { data: organization, error: organizationError } = await admin
+    .from("organizations")
+    .select("access_enabled")
+    .eq("id", store.organization_id)
+    .maybeSingle();
+
+  if (organizationError) {
+    return NextResponse.json(
+      { error: "Impossible de vérifier l’accès à ce compte." },
+      { status: 503 },
+    );
+  }
+
+  if (!organization?.access_enabled) {
+    return NextResponse.json(
+      {
+        error:
+          "Ce compte a été désactivé. Contactez le gestionnaire de votre établissement.",
+      },
+      { status: 403 },
+    );
+  }
+
   const { data: membership } = await admin
     .from("memberships")
     .select("user_id")

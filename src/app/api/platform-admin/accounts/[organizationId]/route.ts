@@ -14,6 +14,7 @@ type UpdateAccountBody = {
   retainCustomerOrders?: boolean;
   retainInvoices?: boolean;
   featureFlags?: unknown;
+  accessEnabled?: boolean;
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -41,6 +42,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (
     !body.storeId ||
     !["retail", "restaurant"].includes(body.businessType ?? "") ||
+    typeof body.accessEnabled !== "boolean" ||
     !Number.isFinite(maxSellers) ||
     maxSellers < 0 ||
     maxSellers > 500
@@ -54,6 +56,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const retainCustomerOrders = body.retainCustomerOrders !== false;
   const retainInvoices = body.retainInvoices !== false;
   const featureFlags = normalizeFeatureFlags(body.featureFlags);
+  const accessEnabled = body.accessEnabled;
 
   if (!retainCustomerOrders) {
     featureFlags.restaurant_pos = false;
@@ -73,6 +76,18 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (storeError) {
     return NextResponse.json({ error: storeError.message }, { status: 400 });
+  }
+
+  const { error: organizationError } = await admin
+    .from("organizations")
+    .update({ access_enabled: accessEnabled })
+    .eq("id", organizationId);
+
+  if (organizationError) {
+    return NextResponse.json(
+      { error: organizationError.message },
+      { status: 400 },
+    );
   }
 
   const { error: settingsError } = await admin
@@ -122,6 +137,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       retainCustomerOrders,
       retainInvoices,
       featureFlags,
+      accessEnabled,
     },
   });
 }
@@ -152,14 +168,16 @@ export async function DELETE(_request: Request, context: RouteContext) {
     );
   }
 
-  const { error: deleteError } = await admin
-    .from("organizations")
-    .delete()
-    .eq("id", organizationId);
+  const { error: deleteError } = await admin.rpc(
+    "delete_organization_cascade",
+    { target_organization_id: organizationId },
+  );
 
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 400 });
   }
+
+  const userCleanupWarnings: string[] = [];
 
   for (const membership of memberships ?? []) {
     const { count } = await admin
@@ -168,9 +186,17 @@ export async function DELETE(_request: Request, context: RouteContext) {
       .eq("user_id", membership.user_id);
 
     if (!count) {
-      await admin.auth.admin.deleteUser(membership.user_id);
+      const { error: authDeleteError } =
+        await admin.auth.admin.deleteUser(membership.user_id);
+
+      if (authDeleteError) {
+        userCleanupWarnings.push(membership.user_id);
+      }
     }
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    userCleanupWarnings,
+  });
 }

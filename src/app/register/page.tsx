@@ -23,6 +23,8 @@ export default function RegisterPage() {
   const [organizationName, setOrganizationName] =
     useState("");
   const [storeName, setStoreName] = useState("");
+  const [businessType, setBusinessType] =
+    useState<"retail" | "restaurant">("retail");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [
@@ -81,6 +83,7 @@ export default function RegisterPage() {
             organization_name:
               organizationName.trim(),
             store_name: storeName.trim(),
+            business_type: businessType,
           },
         },
       });
@@ -105,7 +108,7 @@ export default function RegisterPage() {
             organization_name:
               organizationName.trim(),
             store_name: storeName.trim(),
-            selected_business_type: "retail",
+            selected_business_type: businessType,
           },
         );
 
@@ -306,10 +309,29 @@ export default function RegisterPage() {
               </Field>
             </div>
 
-            <p className="rounded-xl border border-border bg-surface-muted/45 px-4 py-3 text-xs leading-5 text-foreground/55">
-              Le type d’activité et les fonctionnalités du compte seront
-              configurés par l’administrateur de la plateforme.
-            </p>
+            <fieldset>
+              <legend className="text-sm font-semibold">
+                Type d’établissement
+              </legend>
+              <p className="mt-1 text-xs leading-5 text-foreground/50">
+                Ce choix détermine les outils proposés. Après la création,
+                seul l’administrateur de la plateforme pourra le modifier.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <BusinessTypeChoice
+                  checked={businessType === "retail"}
+                  title="Commerce / épicerie"
+                  description="Stocks, ventes rapides, clients et factures."
+                  onSelect={() => setBusinessType("retail")}
+                />
+                <BusinessTypeChoice
+                  checked={businessType === "restaurant"}
+                  title="Restaurant / bar"
+                  description="Carte, recettes, caisse et commandes en salle."
+                  onSelect={() => setBusinessType("restaurant")}
+                />
+              </div>
+            </fieldset>
 
             <Field
               id="register-email"
@@ -477,6 +499,50 @@ function Field({
         {children}
       </div>
     </div>
+  );
+}
+
+function BusinessTypeChoice({
+  checked,
+  title,
+  description,
+  onSelect,
+}: {
+  checked: boolean;
+  title: string;
+  description: string;
+  onSelect: () => void;
+}) {
+  return (
+    <label
+      className={`cursor-pointer rounded-2xl border p-4 transition ${
+        checked
+          ? "border-brand bg-brand/5 ring-2 ring-brand/10"
+          : "border-border bg-surface hover:border-brand/35"
+      }`}
+    >
+      <input
+        type="radio"
+        name="business-type"
+        checked={checked}
+        onChange={onSelect}
+        className="sr-only"
+      />
+      <span className="flex items-center justify-between gap-3">
+        <span className="font-semibold">{title}</span>
+        <span
+          className={`grid h-5 w-5 place-items-center rounded-full border ${
+            checked ? "border-brand bg-brand" : "border-border"
+          }`}
+          aria-hidden="true"
+        >
+          {checked ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
+        </span>
+      </span>
+      <span className="mt-2 block text-xs leading-5 text-foreground/50">
+        {description}
+      </span>
+    </label>
   );
 }
 

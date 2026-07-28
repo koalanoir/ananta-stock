@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
 import {
   ACCOUNT_SESSION_COOKIE,
+  AccountDisabledError,
   accountSessionAllowsPath,
   accountSessionCookieOptions,
   createAccountSessionToken,
   getDefaultAccountDestination,
   loadAccountSessionContext,
 } from "@/lib/account-session";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const result = await createSessionResponse();
 
-  if (result.error) {
+  if (!result.ok) {
     const loginUrl = new URL("/login", requestUrl.origin);
     loginUrl.searchParams.set("error", result.error);
     return NextResponse.redirect(loginUrl);
@@ -41,7 +43,7 @@ export async function GET(request: Request) {
 export async function POST() {
   const result = await createSessionResponse();
 
-  if (result.error) {
+  if (!result.ok) {
     return NextResponse.json(
       { error: result.error },
       { status: result.status },
@@ -74,6 +76,7 @@ async function createSessionResponse() {
 
   if (!supabase) {
     return {
+      ok: false,
       error: "Supabase n’est pas configuré.",
       status: 503,
     } as const;
@@ -85,27 +88,40 @@ async function createSessionResponse() {
 
   if (!user) {
     return {
+      ok: false,
       error: "La session utilisateur est introuvable.",
       status: 401,
     } as const;
   }
 
   try {
-    const context = await loadAccountSessionContext(supabase, user.id);
+    const accountReader = getSupabaseAdminClient() ?? supabase;
+    const context = await loadAccountSessionContext(accountReader, user.id);
 
     if (!context) {
       return {
+        ok: false,
         error: "Aucun compte actif n’est associé à cet utilisateur.",
         status: 403,
       } as const;
     }
 
     return {
+      ok: true,
       context,
       token: await createAccountSessionToken(context),
     } as const;
-  } catch {
+  } catch (error) {
+    if (error instanceof AccountDisabledError) {
+      return {
+        ok: false,
+        error: error.message,
+        status: 403,
+      } as const;
+    }
+
     return {
+      ok: false,
       error: "Impossible de charger la configuration du compte.",
       status: 500,
     } as const;

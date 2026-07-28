@@ -13,7 +13,7 @@ export default async function AdminPage() {
 
   const [organizationsResult, storesResult, settingsResult, membershipsResult] =
     await Promise.all([
-      admin.from("organizations").select("id, name, subscription_status, created_at").order("created_at", { ascending: false }),
+      admin.from("organizations").select("id, name, subscription_status, access_enabled, created_at").order("created_at", { ascending: false }),
       admin.from("stores").select("id, organization_id, name, business_type, active").eq("active", true),
       admin.from("account_settings").select("organization_id, max_sellers, retain_customer_orders, retain_invoices, feature_flags"),
       admin.from("memberships").select("organization_id, user_id, role, active").eq("active", true),
@@ -41,6 +41,7 @@ export default async function AdminPage() {
       id: organization.id,
       name: organization.name,
       subscriptionStatus: organization.subscription_status,
+      accessEnabled: organization.access_enabled,
       createdAt: organization.created_at,
       storeId: store?.id ?? "",
       storeName: store?.name ?? "Aucune boutique",

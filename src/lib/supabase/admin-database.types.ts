@@ -7,6 +7,7 @@ export type AdminDatabase = {
           name: string;
           slug: string;
           subscription_status: "trial" | "active" | "past_due" | "cancelled";
+          access_enabled: boolean;
           trial_ends_at: string;
           created_at: string;
           updated_at: string;
@@ -16,6 +17,7 @@ export type AdminDatabase = {
           name: string;
           slug: string;
           subscription_status?: "trial" | "active" | "past_due" | "cancelled";
+          access_enabled?: boolean;
           trial_ends_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -129,7 +131,14 @@ export type AdminDatabase = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      delete_organization_cascade: {
+        Args: {
+          target_organization_id: string;
+        };
+        Returns: undefined;
+      };
+    };
     Enums: {
       membership_role: "owner" | "manager" | "seller";
     };
