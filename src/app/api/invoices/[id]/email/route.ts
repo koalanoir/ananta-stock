@@ -46,6 +46,7 @@ export async function POST(_request: Request, context: RouteContext) {
       total_amount,
       created_at,
       email_status,
+      table_reference,
       store:stores(name, currency),
       customer:customers(id, full_name, email, phone),
       seller:profiles!invoices_seller_id_fkey(full_name),
