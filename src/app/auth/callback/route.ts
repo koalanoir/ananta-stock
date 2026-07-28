@@ -70,6 +70,10 @@ export async function GET(request: Request) {
 
   const accountType =
     data.user.user_metadata?.account_type;
+  const businessType =
+    data.user.user_metadata?.business_type === "restaurant"
+      ? "restaurant"
+      : "retail";
 
   if (
     accountType !== "owner" ||
@@ -88,6 +92,7 @@ export async function GET(request: Request) {
       {
         organization_name: organizationName,
         store_name: storeName,
+        selected_business_type: businessType,
       },
     );
 
@@ -99,7 +104,10 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(
-    new URL("/", requestUrl.origin),
+    new URL(
+      businessType === "restaurant" ? "/menu" : "/stocks",
+      requestUrl.origin,
+    ),
   );
 }
 
