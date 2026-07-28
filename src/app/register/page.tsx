@@ -12,6 +12,8 @@ import {
   LockKeyhole,
   Mail,
   Store,
+  ShoppingBasket,
+  UtensilsCrossed,
   UserRound,
 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -23,6 +25,8 @@ export default function RegisterPage() {
   const [organizationName, setOrganizationName] =
     useState("");
   const [storeName, setStoreName] = useState("");
+  const [businessType, setBusinessType] =
+    useState<"retail" | "restaurant">("retail");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [
@@ -81,6 +85,7 @@ export default function RegisterPage() {
             organization_name:
               organizationName.trim(),
             store_name: storeName.trim(),
+            business_type: businessType,
           },
         },
       });
@@ -105,6 +110,7 @@ export default function RegisterPage() {
             organization_name:
               organizationName.trim(),
             store_name: storeName.trim(),
+            selected_business_type: businessType,
           },
         );
 
@@ -117,7 +123,9 @@ export default function RegisterPage() {
         return;
       }
 
-      router.replace("/");
+      router.replace(
+        businessType === "restaurant" ? "/menu" : "/stocks",
+      );
       router.refresh();
       return;
     }
@@ -285,6 +293,31 @@ export default function RegisterPage() {
                 />
               </Field>
             </div>
+
+            <fieldset>
+              <legend className="text-sm font-semibold">
+                Type d’activité
+              </legend>
+              <p className="mt-1 text-xs leading-5 text-foreground/50">
+                Ce choix configure les fonctions disponibles. Il pourra être modifié dans les paramètres.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <BusinessTypeButton
+                  active={businessType === "retail"}
+                  icon={<ShoppingBasket size={20} />}
+                  title="Commerce / épicerie"
+                  description="Stocks, ventes, factures et approvisionnements."
+                  onClick={() => setBusinessType("retail")}
+                />
+                <BusinessTypeButton
+                  active={businessType === "restaurant"}
+                  icon={<UtensilsCrossed size={20} />}
+                  title="Restaurant / bar"
+                  description="Carte, recettes, caisse et suivi des commandes."
+                  onClick={() => setBusinessType("restaurant")}
+                />
+              </div>
+            </fieldset>
 
             <Field
               id="register-email"
@@ -471,4 +504,43 @@ function translateAuthError(message: string) {
   }
 
   return message;
+}
+
+function BusinessTypeButton({
+  active,
+  icon,
+  title,
+  description,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex items-start gap-3 rounded-2xl border p-4 text-left transition ${
+        active
+          ? "border-brand bg-brand/5 ring-2 ring-brand/10"
+          : "border-border bg-surface hover:border-foreground/20"
+      }`}
+    >
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
+        active ? "bg-brand text-white" : "bg-surface-muted text-foreground/55"
+      }`}>
+        {icon}
+      </span>
+      <span>
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="mt-1 block text-xs leading-5 text-foreground/50">
+          {description}
+        </span>
+      </span>
+    </button>
+  );
 }
