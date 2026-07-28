@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   Boxes,
@@ -15,6 +18,9 @@ import {
 } from "lucide-react";
 import type { UserRole } from "@/lib/types";
 import { SessionControls } from "@/components/session-controls";
+import { getCurrentMembership } from "@/lib/data/current-user";
+
+type BusinessType = "retail" | "restaurant";
 
 type AppShellProps = {
   active:
@@ -32,35 +38,66 @@ type AppShellProps = {
   role?: UserRole;
   storeName?: string;
   userName?: string;
+  businessType?: BusinessType;
   children: React.ReactNode;
 };
 
 const managerNavigation = [
-  { key: "performance", label: "Performance", mobileLabel: "Stats", href: "/", icon: BarChart3 },
-  { key: "stocks", label: "Stocks", href: "/stocks", icon: Boxes },
-  { key: "movements", label: "Mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
-  { key: "pos", label: "Caisse", href: "/pos", icon: MonitorSmartphone },
-  { key: "restaurant-orders", label: "Commandes clients", mobileLabel: "Clients", href: "/restaurant-orders", icon: ListChecks },
-  { key: "menu", label: "Carte & recettes", mobileLabel: "Carte", href: "/menu", icon: CookingPot },
-  { key: "invoices", label: "Paiements & tickets", mobileLabel: "Tickets", href: "/invoices", icon: ReceiptText },
-  { key: "customers", label: "Clients", href: "/customers", icon: Users },
-  { key: "orders", label: "Commandes", mobileLabel: "Commandes", href: "/orders", icon: Truck },
-  { key: "settings", label: "Paramètres", mobileLabel: "Params", href: "/settings", icon: Settings },
+  { key: "performance", label: "Performance", mobileLabel: "Stats", href: "/", icon: BarChart3, audience: "all" },
+  { key: "stocks", label: "Stocks", href: "/stocks", icon: Boxes, audience: "all" },
+  { key: "movements", label: "Mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History, audience: "all" },
+  { key: "pos", label: "Caisse", href: "/pos", icon: MonitorSmartphone, audience: "restaurant" },
+  { key: "restaurant-orders", label: "Commandes clients", mobileLabel: "Clients", href: "/restaurant-orders", icon: ListChecks, audience: "restaurant" },
+  { key: "menu", label: "Carte & recettes", mobileLabel: "Carte", href: "/menu", icon: CookingPot, audience: "restaurant" },
+  { key: "invoices", label: "Paiements & tickets", mobileLabel: "Tickets", href: "/invoices", icon: ReceiptText, audience: "restaurant" },
+  { key: "invoices", label: "Factures", href: "/invoices", icon: ReceiptText, audience: "retail" },
+  { key: "customers", label: "Clients", href: "/customers", icon: Users, audience: "all" },
+  { key: "orders", label: "Commandes fournisseurs", mobileLabel: "Commandes", href: "/orders", icon: Truck, audience: "all" },
+  { key: "settings", label: "Paramètres", mobileLabel: "Params", href: "/settings", icon: Settings, audience: "all" },
 ] as const;
 
 const sellerNavigation = [
-  { key: "sales", label: "Ventes rapides", mobileLabel: "Ventes", href: "/sales", icon: ShoppingCart },
-  { key: "pos", label: "Caisse restaurant", mobileLabel: "Caisse", href: "/pos", icon: MonitorSmartphone },
-  { key: "restaurant-orders", label: "Commandes clients", mobileLabel: "Commandes", href: "/restaurant-orders", icon: ListChecks },
-  { key: "invoices", label: "Mes tickets", mobileLabel: "Tickets", href: "/invoices", icon: ReceiptText },
-  { key: "stocks", label: "Comptage rapide", mobileLabel: "Comptage", href: "/count", icon: ClipboardCheck },
-  { key: "movements", label: "Mes mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
-  { key: "orders", label: "Réceptions", href: "/orders", icon: Truck },
+  { key: "sales", label: "Ventes rapides", mobileLabel: "Ventes", href: "/sales", icon: ShoppingCart, audience: "retail" },
+  { key: "pos", label: "Caisse restaurant", mobileLabel: "Caisse", href: "/pos", icon: MonitorSmartphone, audience: "restaurant" },
+  { key: "restaurant-orders", label: "Commandes clients", mobileLabel: "Commandes", href: "/restaurant-orders", icon: ListChecks, audience: "restaurant" },
+  { key: "invoices", label: "Mes tickets", mobileLabel: "Tickets", href: "/invoices", icon: ReceiptText, audience: "all" },
+  { key: "stocks", label: "Comptage rapide", mobileLabel: "Comptage", href: "/count", icon: ClipboardCheck, audience: "all" },
+  { key: "movements", label: "Mes mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History, audience: "all" },
+  { key: "orders", label: "Réceptions", href: "/orders", icon: Truck, audience: "all" },
 ] as const;
 
-export function AppShell({ active, role = "manager", storeName = "Ma boutique", userName = "Utilisateur", children }: AppShellProps) {
+export function AppShell({ active, role = "manager", storeName = "Ma boutique", userName = "Utilisateur", businessType, children }: AppShellProps) {
   const isSeller = role === "seller";
-  const navigation = isSeller ? sellerNavigation : managerNavigation;
+  const [detectedBusinessType, setDetectedBusinessType] =
+    useState<BusinessType>("retail");
+  const resolvedBusinessType = businessType ?? detectedBusinessType;
+
+  useEffect(() => {
+    if (businessType) return;
+
+    let mounted = true;
+    void getCurrentMembership()
+      .then((membership) => {
+        const store = membership.stores as { business_type?: string } | null;
+        if (mounted) {
+          setDetectedBusinessType(
+            store?.business_type === "restaurant" ? "restaurant" : "retail",
+          );
+        }
+      })
+      .catch(() => {
+        if (mounted) setDetectedBusinessType("retail");
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [businessType]);
+
+  const navigation = (isSeller ? sellerNavigation : managerNavigation).filter(
+    (item) =>
+      item.audience === "all" || item.audience === resolvedBusinessType,
+  );
   return (
     <div className="min-h-screen overflow-x-clip lg:grid lg:grid-cols-[236px_1fr]">
       <aside className="sticky top-0 hidden h-screen self-start flex-col overflow-y-auto bg-sidebar px-4 py-6 text-white lg:flex">
