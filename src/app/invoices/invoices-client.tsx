@@ -153,7 +153,7 @@ export function InvoicesClient({
     const { data: invoiceData, error: loadError } = await supabase
       .from("invoices")
       .select(`
-        id, invoice_number, total_amount, created_at, email_status,
+        id, invoice_number, total_amount, created_at, email_status, table_reference,
         customer:customers(id, full_name, email, phone),
         seller:profiles!invoices_seller_id_fkey(full_name),
         invoice_items(item_id, description, quantity, unit_price, line_total)
@@ -240,14 +240,14 @@ export function InvoicesClient({
       userName={userName}
     >
       <PageHeading
-        eyebrow="Facturation"
-        title="Factures"
-        description="Créez une facture multi-produits, rattachez un client puis téléchargez ou envoyez le PDF."
+        eyebrow="Encaissement"
+        title="Caisse & tickets"
+        description="Encaissez un panier d’épicerie ou retrouvez les tickets des commandes restaurant pour les télécharger, les réimprimer ou les envoyer."
       />
 
       <div className="mt-6 grid grid-cols-2 rounded-xl bg-surface-muted p-1 sm:max-w-md">
         <TabButton active={tab === "new"} onClick={() => setTab("new")}>
-          Nouvelle facture
+          Nouveau panier
         </TabButton>
         <TabButton active={tab === "history"} onClick={() => setTab("history")}>
           Historique ({invoices.length})
