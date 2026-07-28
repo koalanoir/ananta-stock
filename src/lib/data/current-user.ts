@@ -29,7 +29,8 @@ export async function getCurrentMembership() {
       stores (
         name,
         currency,
-        timezone
+        timezone,
+        business_type
       )
     `)
     .eq("user_id", user.id)
