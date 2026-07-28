@@ -3,7 +3,10 @@ import {
   BarChart3,
   Boxes,
   ClipboardCheck,
+  CookingPot,
   History,
+  ListChecks,
+  MonitorSmartphone,
   ReceiptText,
   Settings,
   ShoppingCart,
@@ -22,6 +25,9 @@ type AppShellProps = {
     | "invoices"
     | "customers"
     | "orders"
+    | "menu"
+    | "pos"
+    | "restaurant-orders"
     | "settings";
   role?: UserRole;
   storeName?: string;
@@ -33,15 +39,20 @@ const managerNavigation = [
   { key: "performance", label: "Performance", mobileLabel: "Stats", href: "/", icon: BarChart3 },
   { key: "stocks", label: "Stocks", href: "/stocks", icon: Boxes },
   { key: "movements", label: "Mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
-  { key: "invoices", label: "Factures", href: "/invoices", icon: ReceiptText },
+  { key: "pos", label: "Caisse", href: "/pos", icon: MonitorSmartphone },
+  { key: "restaurant-orders", label: "Commandes clients", mobileLabel: "Clients", href: "/restaurant-orders", icon: ListChecks },
+  { key: "menu", label: "Carte & recettes", mobileLabel: "Carte", href: "/menu", icon: CookingPot },
+  { key: "invoices", label: "Paiements & tickets", mobileLabel: "Tickets", href: "/invoices", icon: ReceiptText },
   { key: "customers", label: "Clients", href: "/customers", icon: Users },
   { key: "orders", label: "Commandes", mobileLabel: "Commandes", href: "/orders", icon: Truck },
   { key: "settings", label: "Paramètres", mobileLabel: "Params", href: "/settings", icon: Settings },
 ] as const;
 
 const sellerNavigation = [
-  { key: "sales", label: "Ventes", href: "/sales", icon: ShoppingCart },
-  { key: "invoices", label: "Factures", href: "/invoices", icon: ReceiptText },
+  { key: "sales", label: "Ventes rapides", mobileLabel: "Ventes", href: "/sales", icon: ShoppingCart },
+  { key: "pos", label: "Caisse restaurant", mobileLabel: "Caisse", href: "/pos", icon: MonitorSmartphone },
+  { key: "restaurant-orders", label: "Commandes clients", mobileLabel: "Commandes", href: "/restaurant-orders", icon: ListChecks },
+  { key: "invoices", label: "Mes tickets", mobileLabel: "Tickets", href: "/invoices", icon: ReceiptText },
   { key: "stocks", label: "Comptage rapide", mobileLabel: "Comptage", href: "/count", icon: ClipboardCheck },
   { key: "movements", label: "Mes mouvements", mobileLabel: "Mouv.", href: "/movements", icon: History },
   { key: "orders", label: "Réceptions", href: "/orders", icon: Truck },
