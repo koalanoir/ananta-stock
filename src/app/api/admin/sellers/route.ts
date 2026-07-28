@@ -140,6 +140,34 @@ export async function POST(request: Request) {
     );
   }
 
+  const [{ data: accountSettings }, { count: activeSellerCount }] =
+    await Promise.all([
+      supabase
+        .from("account_settings")
+        .select("max_sellers")
+        .eq("organization_id", store.organization_id)
+        .maybeSingle(),
+      admin
+        .from("memberships")
+        .select("user_id", { count: "exact", head: true })
+        .eq("organization_id", store.organization_id)
+        .eq("role", "seller")
+        .eq("active", true),
+    ]);
+
+  const maxSellers = Number(accountSettings?.max_sellers ?? 5);
+  if ((activeSellerCount ?? 0) >= maxSellers) {
+    return NextResponse.json(
+      {
+        error:
+          maxSellers === 0
+            ? "La création de vendeurs est désactivée pour ce compte."
+            : `La limite de ${maxSellers} vendeur${maxSellers > 1 ? "s" : ""} est atteinte.`,
+      },
+      { status: 403 },
+    );
+  }
+
   /*
    * Vérification préalable pour produire un message lisible.
    * L’index SQL reste la protection définitive contre les doublons.
