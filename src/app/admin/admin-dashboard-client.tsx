@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, LoaderCircle, LogOut, Save, Search, ShieldCheck, Trash2, Users } from "lucide-react";
+import { Building2, LoaderCircle, LogOut, Power, PowerOff, Save, Search, ShieldCheck, Trash2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ACCOUNT_FEATURES, type FeatureFlags } from "@/lib/account-features";
 
@@ -9,6 +9,7 @@ export type AdminAccount = {
   id: string;
   name: string;
   subscriptionStatus: string;
+  accessEnabled: boolean;
   createdAt: string;
   storeId: string;
   storeName: string;
@@ -42,14 +43,7 @@ export function AdminDashboardClient({ initialAccounts }: { initialAccounts: Adm
     const response = await fetch(`/api/platform-admin/accounts/${account.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        storeId: account.storeId,
-        businessType: account.businessType,
-        maxSellers: account.maxSellers,
-        retainCustomerOrders: account.retainCustomerOrders,
-        retainInvoices: account.retainInvoices,
-        featureFlags: account.featureFlags,
-      }),
+      body: JSON.stringify(accountPayload(account)),
     });
     const result = await response.json() as { error?: string; settings?: Partial<AdminAccount> };
     setPendingId("");
@@ -60,16 +54,74 @@ export function AdminDashboardClient({ initialAccounts }: { initialAccounts: Adm
     );
   }
 
+  async function toggleAccess(account: AdminAccount) {
+    const nextAccount = {
+      ...account,
+      accessEnabled: !account.accessEnabled,
+    };
+
+    const confirmation = nextAccount.accessEnabled
+      ? window.confirm(
+          `Réactiver ${account.name} ? Ses utilisateurs pourront de nouveau se connecter et accéder aux données.`,
+        )
+      : window.confirm(
+          `Désactiver ${account.name} ? Tous ses utilisateurs perdront immédiatement l’accès, sans suppression des données.`,
+        );
+
+    if (!confirmation) return;
+
+    setPendingId(account.id);
+    setError("");
+    setMessage("");
+
+    const response = await fetch(
+      `/api/platform-admin/accounts/${account.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(accountPayload(nextAccount)),
+      },
+    );
+    const result = await response.json() as {
+      error?: string;
+      settings?: Partial<AdminAccount>;
+    };
+
+    setPendingId("");
+
+    if (!response.ok) {
+      setError(result.error ?? "Modification de l’accès impossible.");
+      return;
+    }
+
+    update(account.id, {
+      ...result.settings,
+      accessEnabled: nextAccount.accessEnabled,
+    });
+    setMessage(
+      nextAccount.accessEnabled
+        ? `${account.name} a été réactivé.`
+        : `${account.name} a été désactivé et ses accès sont maintenant bloqués.`,
+    );
+  }
+
   async function remove(account: AdminAccount) {
     const confirmation = window.prompt(`Cette action supprime définitivement ${account.name}, ses boutiques, utilisateurs et données. Tapez SUPPRIMER pour confirmer.`);
     if (confirmation !== "SUPPRIMER") return;
     setPendingId(account.id); setError(""); setMessage("");
     const response = await fetch(`/api/platform-admin/accounts/${account.id}`, { method: "DELETE" });
-    const result = await response.json() as { error?: string };
+    const result = await response.json() as {
+      error?: string;
+      userCleanupWarnings?: string[];
+    };
     setPendingId("");
     if (!response.ok) return setError(result.error ?? "Suppression impossible.");
     setAccounts((current) => current.filter((item) => item.id !== account.id));
-    setMessage(`${account.name} a été supprimé.`);
+    setMessage(
+      result.userCleanupWarnings?.length
+        ? `${account.name} et ses données ont été supprimés. ${result.userCleanupWarnings.length} identité technique n’a pas pu être nettoyée automatiquement.`
+        : `${account.name}, ses utilisateurs et toutes ses données ont été supprimés définitivement.`,
+    );
   }
 
   async function logout() {
@@ -97,10 +149,24 @@ export function AdminDashboardClient({ initialAccounts }: { initialAccounts: Adm
         {error ? <p className="mt-5 rounded-xl bg-danger/10 px-4 py-3 text-sm font-semibold text-danger">{error}</p> : null}
         <section className="mt-5 space-y-5">
           {filtered.map((account) => (
-            <article key={account.id} className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+            <article key={account.id} className={`rounded-2xl border bg-surface p-5 shadow-sm sm:p-6 ${account.accessEnabled ? "border-border" : "border-danger/25"}`}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-strong">{account.subscriptionStatus}</p><h2 className="mt-2 text-xl font-semibold">{account.name}</h2><p className="mt-1 text-sm text-foreground/50">{account.storeName} · {account.memberCount} membre{account.memberCount > 1 ? "s" : ""}</p></div>
-                <button disabled={pendingId === account.id} onClick={() => remove(account)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-danger/25 px-3 text-xs font-semibold text-danger hover:bg-danger/5 disabled:opacity-50"><Trash2 size={15} /> Supprimer le compte</button>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-strong">{account.subscriptionStatus}</p>
+                    <span className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold ${account.accessEnabled ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
+                      {account.accessEnabled ? "Compte actif" : "Compte désactivé"}
+                    </span>
+                  </div>
+                  <h2 className="mt-2 text-xl font-semibold">{account.name}</h2><p className="mt-1 text-sm text-foreground/50">{account.storeName} · {account.memberCount} membre{account.memberCount > 1 ? "s" : ""}</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button disabled={pendingId === account.id} onClick={() => toggleAccess(account)} className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50 ${account.accessEnabled ? "border-warning/30 text-warning hover:bg-warning/5" : "border-success/30 text-success hover:bg-success/5"}`}>
+                    {account.accessEnabled ? <PowerOff size={15} /> : <Power size={15} />}
+                    {account.accessEnabled ? "Désactiver" : "Réactiver"}
+                  </button>
+                  <button disabled={pendingId === account.id} onClick={() => remove(account)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-danger/25 px-3 text-xs font-semibold text-danger hover:bg-danger/5 disabled:opacity-50"><Trash2 size={15} /> Supprimer le compte</button>
+                </div>
               </div>
               <div className="mt-5 grid gap-4 border-t border-border pt-5 lg:grid-cols-3">
                 <label className="text-sm font-semibold">Type d’activité<select value={account.businessType} onChange={(event) => update(account.id, { businessType: event.target.value as AdminAccount["businessType"] })} className={fieldClass}><option value="retail">Commerce / épicerie</option><option value="restaurant">Restaurant / bar</option></select></label>
@@ -122,5 +188,16 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (val
 }
 function Summary({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return <article className="rounded-2xl border border-border bg-surface p-5"><span className="grid h-9 w-9 place-items-center rounded-xl bg-brand/10 text-brand-strong">{icon}</span><p className="mt-4 text-sm text-foreground/50">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p></article>;
+}
+function accountPayload(account: AdminAccount) {
+  return {
+    storeId: account.storeId,
+    businessType: account.businessType,
+    maxSellers: account.maxSellers,
+    retainCustomerOrders: account.retainCustomerOrders,
+    retainInvoices: account.retainInvoices,
+    featureFlags: account.featureFlags,
+    accessEnabled: account.accessEnabled,
+  };
 }
 const fieldClass = "mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 font-normal outline-none focus:border-brand";

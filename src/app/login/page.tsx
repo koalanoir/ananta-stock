@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   FormEvent,
+  useEffect,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -43,6 +44,14 @@ export default function LoginPage() {
 
   const [errorMessage, setErrorMessage] =
     useState("");
+
+  useEffect(() => {
+    const message = new URLSearchParams(window.location.search).get("error");
+    if (!message) return;
+
+    const timer = window.setTimeout(() => setErrorMessage(message), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function changeLoginMode(mode: LoginMode) {
     setLoginMode(mode);
@@ -132,7 +141,9 @@ export default function LoginPage() {
                 organizationName,
               store_name: storeName,
               selected_business_type:
-                "retail",
+                data.user.user_metadata?.business_type === "restaurant"
+                  ? "restaurant"
+                  : "retail",
             },
           );
 

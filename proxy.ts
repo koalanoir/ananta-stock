@@ -9,8 +9,10 @@ import {
 } from "@/lib/account-features";
 import {
   ACCOUNT_SESSION_COOKIE,
+  accountSessionCookieOptions,
   verifyAccountSessionToken,
 } from "@/lib/account-session";
+import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const publicRoutes = [
   "/login",
@@ -142,6 +144,45 @@ export async function proxy(request: NextRequest) {
         `${pathname}${request.nextUrl.search}`,
       );
       return NextResponse.redirect(bootstrapUrl);
+    }
+
+    const admin = getSupabaseAdminClient();
+
+    if (admin) {
+      const { data: organization, error: organizationError } = await admin
+        .from("organizations")
+        .select("access_enabled")
+        .eq("id", accountSession.organizationId)
+        .maybeSingle();
+
+      if (organizationError || !organization?.access_enabled) {
+        const loginUrl = request.nextUrl.clone();
+        loginUrl.pathname = "/login";
+        loginUrl.search = "";
+        loginUrl.searchParams.set(
+          "error",
+          organizationError
+            ? "Impossible de vérifier l’accès à ce compte."
+            : "Ce compte a été désactivé par l’administrateur de la plateforme.",
+        );
+
+        const disabledResponse = NextResponse.redirect(loginUrl);
+        disabledResponse.cookies.set(ACCOUNT_SESSION_COOKIE, "", {
+          ...accountSessionCookieOptions,
+          maxAge: 0,
+        });
+
+        for (const cookie of request.cookies.getAll()) {
+          if (cookie.name.startsWith("sb-")) {
+            disabledResponse.cookies.set(cookie.name, "", {
+              path: "/",
+              maxAge: 0,
+            });
+          }
+        }
+
+        return disabledResponse;
+      }
     }
 
     const routeFeature =
