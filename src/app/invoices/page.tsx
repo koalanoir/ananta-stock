@@ -63,7 +63,7 @@ export default async function InvoicesPage() {
     supabase
       .from("invoices")
       .select(`
-        id, invoice_number, total_amount, created_at, email_status,
+        id, invoice_number, total_amount, created_at, email_status, table_reference,
         customer:customers(id, full_name, email, phone),
         seller:profiles!invoices_seller_id_fkey(full_name),
         invoice_items(item_id, description, quantity, unit_price, line_total)
