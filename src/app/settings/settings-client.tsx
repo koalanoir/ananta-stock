@@ -163,6 +163,7 @@ export function SettingsClient({
       role={role}
       storeName={storeName}
       userName={userName}
+      businessType={businessType}
     >
       <PageHeading
         eyebrow="Administration"

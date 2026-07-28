@@ -33,7 +33,7 @@ export function RestaurantOrdersClient({role,storeId,storeName,currency,userName
     setPendingId(order.id);setError("");const {data,error:rpcError}=await supabase.rpc("pay_customer_order",{target_customer_order_id:order.id,target_customer_id:null,customer_data:{},operation_id:crypto.randomUUID()});setPendingId("");
     if(rpcError)return setError(rpcError.message);const invoice=(data as {id?:string}|null)?.id;router.refresh();if(invoice)router.push(`/invoices?invoice=${invoice}`);
   }
-  return <AppShell active="restaurant-orders" role={role} storeName={storeName} userName={userName}>
+  return <AppShell active="restaurant-orders" role={role} storeName={storeName} userName={userName} businessType="restaurant">
     <PageHeading eyebrow="Service en temps réel" title="Commandes clients" description="Suivez la préparation, le service et le paiement. Les statuts se synchronisent automatiquement pour toute l’équipe." action={<Link href="/pos" className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white"><CirclePlus size={18}/> Nouvelle commande</Link>}/>
     {error?<p className="mt-5 rounded-xl border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</p>:null}
     <div className="mt-7 flex gap-2 overflow-x-auto pb-1">{(["active","waiting","preparing","ready","served"] as const).map((key)=><button key={key} onClick={()=>setFilter(key)} className={`h-10 shrink-0 rounded-xl border px-4 text-sm font-semibold ${filter===key?"border-sidebar bg-sidebar text-white":"border-border bg-surface"}`}>{key==="active"?"À traiter":labels[key]}</button>)}</div>

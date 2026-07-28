@@ -24,13 +24,14 @@ export default async function PosPage() {
   }
   if (!storeId) throw new Error("Aucun magasin actif.");
   const [storeResult, menuResult] = await Promise.all([
-    supabase.from("stores").select("name, currency").eq("id", storeId).single(),
+    supabase.from("stores").select("name, currency, business_type").eq("id", storeId).single(),
     supabase.from("menu_items").select("id, name, description, type, selling_price")
       .eq("store_id", storeId).eq("active", true).order("type").order("name"),
   ]);
   const error = storeResult.error ?? menuResult.error;
   if (error) throw new Error(`Impossible de charger la caisse : ${error.message}`);
   if (!storeResult.data) throw new Error("Magasin introuvable.");
+  if (storeResult.data.business_type !== "restaurant") redirect("/stocks");
   const menu = (menuResult.data ?? []).map((item) => ({
     ...item, selling_price: Number(item.selling_price),
   })) as MenuItemSummary[];

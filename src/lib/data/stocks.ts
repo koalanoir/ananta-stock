@@ -4,7 +4,7 @@ export type StockOverviewRow = {
   item_id: string;
   name: string;
   brand: string;
-  kind: "commercialise" | "outil";
+  kind: "commercialise" | "outil" | "ingredient";
   unit: string;
   threshold: number | string;
   unit_cost: number | string;
@@ -71,7 +71,7 @@ export async function getStockItems(storeId: string): Promise<StockOverviewRow[]
     id: string;
     name: string;
     brand: string;
-    kind: "commercialise" | "outil";
+    kind: "commercialise" | "outil" | "ingredient";
     unit: string;
     threshold: number | string;
     unit_cost: number | string;

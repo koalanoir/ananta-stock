@@ -122,6 +122,10 @@ export default function LoginPage() {
         data.user.user_metadata
           ?.store_name ?? "",
       ).trim();
+      const businessType =
+        data.user.user_metadata?.business_type === "restaurant"
+          ? "restaurant"
+          : "retail";
 
       if (organizationName && storeName) {
         const { error: onboardingError } =
@@ -131,6 +135,8 @@ export default function LoginPage() {
               organization_name:
                 organizationName,
               store_name: storeName,
+              selected_business_type:
+                businessType,
             },
           );
 
