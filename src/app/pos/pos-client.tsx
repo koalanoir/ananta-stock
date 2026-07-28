@@ -26,7 +26,7 @@ export function PosClient({ role, storeId, storeName, currency, userName, menu }
     const {error:rpcError}=await supabase.rpc("create_customer_order",{target_store_id:storeId,target_table_reference:table,order_lines:cartLines.map((item)=>({menu_item_id:item.id,quantity:item.quantity})),operation_id:crypto.randomUUID()});
     setPending(false);if(rpcError)return setError(rpcError.message);router.push("/restaurant-orders");router.refresh();
   }
-  return <AppShell active="pos" role={role} storeName={storeName} userName={userName}>
+  return <AppShell active="pos" role={role} storeName={storeName} userName={userName} businessType="restaurant">
     <PageHeading eyebrow="Caisse restaurant" title="Nouvelle commande" description="Composez la commande du client. La table est facultative et peut contenir un numéro, un nom ou « à emporter »."/>
     <div className="mt-7 grid gap-5 xl:grid-cols-[1fr_360px]">
       <section>
