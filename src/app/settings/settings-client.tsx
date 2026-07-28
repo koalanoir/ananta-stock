@@ -33,6 +33,7 @@ type SettingsClientProps = {
   userName: string;
   role: Extract<UserRole, "owner" | "manager">;
   initialSellers: SellerSummary[];
+  initialBusinessType: "retail" | "restaurant";
 };
 
 export function SettingsClient({
@@ -42,6 +43,7 @@ export function SettingsClient({
   userName,
   role,
   initialSellers,
+  initialBusinessType,
 }: SettingsClientProps) {
   const router = useRouter();
 
@@ -58,6 +60,23 @@ export function SettingsClient({
 
   const [errorMessage, setErrorMessage] =
     useState("");
+  const [businessType, setBusinessType] = useState(initialBusinessType);
+  const [savingBusinessType, setSavingBusinessType] = useState(false);
+
+  async function updateBusinessType(value: "retail" | "restaurant") {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return setErrorMessage("Supabase n’est pas configuré.");
+    setSavingBusinessType(true);
+    setErrorMessage("");
+    const { error } = await supabase.rpc("set_store_business_type", {
+      target_store_id: storeId,
+      new_business_type: value,
+    });
+    setSavingBusinessType(false);
+    if (error) return setErrorMessage(`Impossible de changer le type de commerce : ${error.message}`);
+    setBusinessType(value);
+    router.refresh();
+  }
 
   const activeSellers = useMemo(
     () =>
@@ -175,8 +194,39 @@ export function SettingsClient({
         </div>
       ) : null}
 
+      <section className="mt-8 rounded-2xl border border-border bg-surface p-5 shadow-sm">
+        <h2 className="text-lg font-semibold">Type d’activité</h2>
+        <p className="mt-1 text-sm text-foreground/50">
+          Le mode restaurant active la carte, les recettes, la caisse et le suivi de préparation.
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {(["retail", "restaurant"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              disabled={savingBusinessType}
+              onClick={() => updateBusinessType(value)}
+              className={`rounded-xl border p-4 text-left transition ${
+                businessType === value
+                  ? "border-brand bg-brand/5"
+                  : "border-border hover:border-foreground/20"
+              }`}
+            >
+              <span className="block font-semibold">
+                {value === "retail" ? "Commerce / épicerie" : "Restaurant / bar"}
+              </span>
+              <span className="mt-1 block text-xs text-foreground/48">
+                {value === "retail"
+                  ? "Vente directe de produits stockés."
+                  : "Plats composés, commandes en préparation et tickets de table."}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section
-        className="mt-8 grid gap-4 sm:grid-cols-3"
+        className="mt-5 grid gap-4 sm:grid-cols-3"
         aria-label="Résumé de l’équipe"
       >
         <Summary

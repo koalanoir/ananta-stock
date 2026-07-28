@@ -50,6 +50,9 @@ export type PurchaseOrderSummary = {
   expected_delivery_date: string | null;
   ordered_at: string | null;
   created_at: string;
+  closed_incomplete: boolean;
+  closed_at: string | null;
+  closure_comment: string | null;
   supplier: {
     id: string;
     name: string;
@@ -155,6 +158,24 @@ export function OrdersClient({
         ),
       );
     }
+  }
+
+  async function closeIncomplete(order: PurchaseOrderSummary) {
+    const comment = window.prompt(
+      "Pourquoi la livraison est-elle clôturée incomplète ? (produits manquants, reliquat annulé…)",
+    );
+    if (!comment?.trim()) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return setError("Supabase n’est pas configuré.");
+    setPending(true);
+    setError("");
+    const { error: rpcError } = await supabase.rpc(
+      "close_purchase_order_incomplete",
+      { target_purchase_order_id: order.id, closing_comment: comment },
+    );
+    setPending(false);
+    if (rpcError) return setError(rpcError.message);
+    router.refresh();
   }
 
   const openNotifications = notifications.filter((item) => !item.read_at);
@@ -273,7 +294,9 @@ export function OrdersClient({
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyles[order.status]}`}
                     >
-                      {statusLabels[order.status]}
+                      {order.closed_incomplete
+                        ? "Clôturée incomplète"
+                        : statusLabels[order.status]}
                     </span>
                   </div>
                   <p className="mt-2 text-lg font-semibold">
@@ -345,6 +368,19 @@ export function OrdersClient({
                     className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand px-4 text-sm font-semibold text-white"
                   >
                     <PackageCheck size={17} /> Réceptionner
+                  </button>
+                ) : null}
+                {isSeller &&
+                order.status === "pending" &&
+                received > 0 &&
+                received < expected ? (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => closeIncomplete(order)}
+                    className="inline-flex h-11 items-center gap-2 rounded-xl border border-warning/30 px-4 text-sm font-semibold text-warning disabled:opacity-50"
+                  >
+                    Clôturer avec manquants
                   </button>
                 ) : null}
               </div>
@@ -569,6 +605,7 @@ function ReceiveOrderDialog({
     Record<string, { quantity: number; comment: string }>
   >({});
   const [comment, setComment] = useState("");
+  const [closeAfterReceipt, setCloseAfterReceipt] = useState(false);
   const [pending, setPending] = useState(false);
 
   function setLine(
@@ -603,8 +640,32 @@ function ReceiveOrderDialog({
       receipt_comment: comment,
       operation_id: crypto.randomUUID(),
     });
+    if (error) {
+      setPending(false);
+      return onError(error.message);
+    }
+    const willRemainIncomplete = order.purchase_order_items.some((line) => {
+      const receivedNow = lines[line.id]?.quantity ?? 0;
+      return line.received_quantity + receivedNow < line.ordered_quantity;
+    });
+    if (closeAfterReceipt && willRemainIncomplete) {
+      if (comment.trim().length < 3) {
+        setPending(false);
+        return onError("Ajoutez un commentaire expliquant les produits manquants.");
+      }
+      const { error: closeError } = await supabase.rpc(
+        "close_purchase_order_incomplete",
+        {
+          target_purchase_order_id: order.id,
+          closing_comment: comment,
+        },
+      );
+      if (closeError) {
+        setPending(false);
+        return onError(closeError.message);
+      }
+    }
     setPending(false);
-    if (error) return onError(error.message);
     onClose();
     router.refresh();
   }
@@ -669,6 +730,20 @@ function ReceiveOrderDialog({
           onChange={(event) => setComment(event.target.value)}
           className="mt-2 min-h-20 w-full rounded-xl border border-border bg-surface p-3 font-normal outline-none focus:border-brand"
         />
+      </label>
+      <label className="mt-4 flex items-start gap-3 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm">
+        <input
+          type="checkbox"
+          checked={closeAfterReceipt}
+          onChange={(event) => setCloseAfterReceipt(event.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-[var(--brand)]"
+        />
+        <span>
+          <span className="block font-semibold">Clôturer même si la livraison est incomplète</span>
+          <span className="mt-1 block text-xs text-foreground/50">
+            Les quantités reçues augmenteront le stock. Les reliquats manquants seront archivés avec le commentaire ci-dessus.
+          </span>
+        </span>
       </label>
       <button
         type="button"

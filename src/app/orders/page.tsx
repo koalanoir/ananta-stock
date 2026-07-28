@@ -73,7 +73,7 @@ export default async function OrdersPage() {
         .from("purchase_orders")
         .select(`
           id, order_number, status, notes, expected_delivery_date,
-          ordered_at, created_at,
+          ordered_at, created_at, closed_incomplete, closed_at, closure_comment,
           supplier:suppliers(id, name, email, phone),
           creator:profiles!purchase_orders_created_by_fkey(full_name),
           purchase_order_items(

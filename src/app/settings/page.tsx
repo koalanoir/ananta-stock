@@ -179,7 +179,7 @@ export default async function SettingsPage() {
     error: storeError,
   } = await supabase
     .from("stores")
-    .select("name, timezone")
+    .select("name, timezone, business_type")
     .eq("id", storeId)
     .single();
 
@@ -396,6 +396,7 @@ export default async function SettingsPage() {
       }
       storeId={storeId}
       storeName={storeData.name}
+      initialBusinessType={(storeData.business_type ?? "retail") as "retail" | "restaurant"}
       userName={String(user.user_metadata?.full_name ?? "").trim() || user.email || "Gestionnaire"}
       role={administratorRole}
       initialSellers={sellers}
